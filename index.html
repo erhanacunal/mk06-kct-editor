@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MK06 KCT Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: tool bar on top, keyboard plan as the main surface, inspector beside it (stacks below on narrow screens). */
+:root{
+  --bg:#eceef0; --panel:#ffffff; --ink:#1b2126; --muted:#5f6a73; --line:#d3d8dc;
+  --key:#f8f9f9; --key-edge:#bfc6cc; --accent:#0d7a6b; --accent-ink:#ffffff;
+  --changed:#b86e00; --seq:#6c47c9; --special:#7c8790; --danger:#b3261e; --soft:#e3f1ee;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --u:42px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14181b; --panel:#1b2125; --ink:#e3e8eb; --muted:#93a0a9; --line:#2d363c;
+  --key:#232b30; --key-edge:#3a454c; --accent:#3fc4ab; --accent-ink:#0b1714;
+  --changed:#f0a43a; --seq:#a98cf7; --special:#8996a0; --danger:#f2847b; --soft:#18302b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14181b; --panel:#1b2125; --ink:#e3e8eb; --muted:#93a0a9; --line:#2d363c;
+  --key:#232b30; --key-edge:#3a454c; --accent:#3fc4ab; --accent-ink:#0b1714;
+  --changed:#f0a43a; --seq:#a98cf7; --special:#8996a0; --danger:#f2847b; --soft:#18302b; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;padding:0 16px 32px}
+h1,h2,h3{margin:0;text-wrap:balance}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono)}
+.wrap{max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+#work{display:flex;flex-direction:column;gap:14px}
+#work[hidden]{display:none}
+header.bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding-block:16px 4px}
+header.bar h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+header.bar h1 small{font-family:var(--f-mono);font-weight:500;font-size:12px;color:var(--muted);margin-left:8px;letter-spacing:.04em}
+.spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.small{padding:4px 9px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.file-pill{font-family:var(--f-mono);font-size:12.5px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drop{border:1.5px dashed var(--key-edge);border-radius:8px;padding:14px 16px;color:var(--muted);font-size:13.5px}
+.drop.over{border-color:var(--accent);background:var(--soft);color:var(--ink)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.hdr{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px;padding:14px 16px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.field input,.field select,.ins select,.ins input,.ins textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0;width:100%}
+.ro{font-family:var(--f-mono);font-size:13px;padding-block:6px}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;align-items:start}
+@media (max-width:1100px){.main{grid-template-columns:minmax(0,1fr)}}
+.tabs{display:flex;gap:4px;padding:10px 12px 0;flex-wrap:wrap;align-items:center}
+.tab{border:none;background:none;padding:6px 10px;border-radius:6px;cursor:pointer;color:var(--muted);font-weight:600}
+.tab[aria-selected="true"]{background:var(--soft);color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);padding:6px 14px 0}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:10px;border-radius:2px;border:1px solid var(--key-edge);background:var(--key)}
+.sw.un{border-style:dashed;background:transparent}
+.sw.sq{border-color:var(--seq);box-shadow:inset 0 -3px 0 var(--seq)}
+.sw.sp{background:repeating-linear-gradient(135deg,var(--key) 0 3px,var(--line) 3px 5px)}
+.sw.ch{border:2px solid var(--changed)}
+.kbd-scroll{overflow-x:auto;padding:14px}
+.kbd{position:relative}
+.key{position:absolute;border:1px solid var(--key-edge);background:var(--key);border-radius:5px;padding:3px 5px;cursor:pointer;text-align:left;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;box-shadow:0 1px 0 var(--key-edge)}
+.key:hover{border-color:var(--accent)}
+.key .ph{font-size:10px;color:var(--muted);line-height:1.1;white-space:nowrap}
+.key .ac{font-family:var(--f-mono);font-size:11px;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.key.un{border-style:dashed;background:transparent;box-shadow:none}
+.key.un .ac{color:var(--muted);font-weight:400}
+.key.sq{box-shadow:inset 0 -3px 0 var(--seq)}
+.key.sq .ac{color:var(--seq)}
+.key.sp{background:repeating-linear-gradient(135deg,var(--key) 0 4px,var(--line) 4px 6px)}
+.key.sp .ac{color:var(--special)}
+.key.ch{border:2px solid var(--changed)}
+.key.sel{outline:2.5px solid var(--accent);outline-offset:1px}
+.key.na{cursor:default;opacity:.45;border-style:dotted}
+.zone{position:absolute;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.ins{padding:14px 16px;display:flex;flex-direction:column;gap:12px;position:sticky;top:env(safe-area-inset-top,0px)}
+.ins h2{font-size:16px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.ins h2 .mono{font-size:12px;color:var(--muted);font-weight:500}
+.col{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.colhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.colhead .lbl{min-width:44px}
+.colhead select{width:auto;flex:1}
+.mods{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px}
+.mods label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.hint{font-size:12px;color:var(--muted)}
+.err{font-size:12px;color:var(--danger)}
+.ins textarea{font-family:var(--f-mono);font-size:12.5px;min-height:70px;resize:vertical}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.row input{flex:1;min-width:120px}
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+@media (max-width:860px){.lower{grid-template-columns:minmax(0,1fr)}}
+.sect{padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.sect h3{font-size:14px}
+.meter{height:8px;border-radius:4px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--seq)}
+.meter.over i{background:var(--danger)}
+ul.changes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;max-height:260px;overflow:auto}
+ul.changes button{width:100%;text-align:left;border:none;background:none;padding:5px 6px;border-radius:5px;cursor:pointer;display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;font-size:12.5px}
+ul.changes button:hover{background:var(--soft)}
+.tbl-wrap{overflow-x:auto;padding:0 14px 14px}
+table.all{border-collapse:collapse;width:100%;font-size:12.5px}
+table.all th,table.all td{padding:4px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+table.all th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);position:sticky;top:0;background:var(--panel)}
+table.all tr{cursor:pointer}
+table.all tr:hover td{background:var(--soft)}
+table.all tr.sel td{background:var(--soft)}
+table.all td.ch{color:var(--changed);font-weight:600}
+.syntax{font-size:12px;color:var(--muted);line-height:1.6}
+.syntax code{font-family:var(--f-mono);font-size:11.5px;background:var(--bg);padding:0 4px;border-radius:3px}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.key{transition:border-color .12s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="bar">
+    <h1>MK06 KCT Editor <small>WEY KEYCODE TABLE</small></h1>
+    <span class="spacer"></span>
+    <span class="file-pill" id="filePill"></span>
+    <label class="btn" for="fileIn">Open file</label>
+    <input type="file" id="fileIn" accept=".kct" hidden>
+    <button class="btn primary" id="saveBtn">Download (.zip)</button>
+  </header>
+
+  <div class="drop" id="drop">Drop a Wey MK06 <span class="mono">.kct</span> keycode table here, or use “Open file”. Edited keys get an orange outline. “Download” gives you a zip with the edited <span class="mono">.kct</span> inside, ready to load into the keyboard.</div>
+
+  <div id="work" hidden>
+  <section class="panel hdr" aria-label="Table header">
+    <div class="field"><label for="hName">Table name</label><input id="hName" class="mono" maxlength="24"></div>
+    <div class="field"><label for="hKpL">Left keypad ID (0x24)</label><select id="hKpL"></select></div>
+    <div class="field"><label for="hKpR">Right keypad ID (0x23)</label><select id="hKpR"></select></div>
+    <div class="field"><span class="lbl">KCT no. / base</span><span class="ro" id="hNo"></span></div>
+    <div class="field"><span class="lbl">Emulation type</span><span class="ro" id="hType"></span></div>
+    <div class="field"><span class="lbl">Country code</span><span class="ro" id="hCountry"></span></div>
+  </section>
+
+  <div class="main">
+    <section class="panel" aria-label="Keys">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tabKbd" aria-selected="true">Keyboard</button>
+        <button class="tab" role="tab" id="tabList" aria-selected="false">All entries</button>
+        <span class="spacer"></span>
+        <label class="hint" for="colView">Showing column</label>
+        <select id="colView" class="btn small"><option value="0">Plain</option><option value="1">Shift</option><option value="2">Ctrl</option><option value="3">Alt</option></select>
+      </div>
+      <div class="legend">
+        <span><i class="sw"></i>Key</span>
+        <span><i class="sw un"></i>Unassigned (keyboard macro runs)</span>
+        <span><i class="sw sq"></i>Key sequence</span>
+        <span><i class="sw sp"></i>Special (keyboard handles it)</span>
+        <span><i class="sw ch"></i>Edited</span>
+      </div>
+      <div class="kbd-scroll" id="kbdView"><div class="kbd" id="kbd"></div></div>
+      <div class="tbl-wrap" id="listView" hidden>
+        <label class="hint" style="display:inline-flex;gap:6px;align-items:center;padding-block:8px"><input type="checkbox" id="onlyUsed" checked> Only non-empty entries</label>
+        <table class="all"><thead><tr><th>No</th><th>Physical key</th><th>Plain</th><th>Shift</th><th>Ctrl</th><th>Alt</th></tr></thead><tbody id="allBody"></tbody></table>
+      </div>
+    </section>
+
+    <aside class="panel ins" id="ins" aria-label="Selected key"></aside>
+  </div>
+
+  <div class="lower">
+    <section class="panel sect">
+      <h3>Changes</h3>
+      <ul class="changes" id="changes"></ul>
+    </section>
+    <section class="panel sect">
+      <h3>Sequence area</h3>
+      <div class="meter" id="meter"><i></i></div>
+      <div class="hint" id="meterTxt"></div>
+      <div class="syntax">
+        Sequence syntax: <code>A</code> tap · <code>+LShift</code> press · <code>-LShift</code> release · <code>Ctrl+Alt+T</code> chord · <code>#FE</code> raw byte · <code>k2B</code> key by position number.
+        Sequences send key <em>positions</em> (IBM PC/AT key numbers), written with US key names; the computer’s keyboard layout decides which characters come out. “Add text” converts text using the layout chosen next to it.
+      </div>
+    </section>
+  </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+const STR_BASE = 0xAC0, FILE_SIZE = 0x1000, MAIN = 0x80, NKEYS = 0xB0;
+const COLS = ["Plain", "Shift", "Ctrl", "Alt"];
+
+/* ---------- IBM PC/AT key positions (what a 40nn word sends) ---------- */
+const AT = {0x01:"`",0x02:"1",0x03:"2",0x04:"3",0x05:"4",0x06:"5",0x07:"6",0x08:"7",0x09:"8",0x0A:"9",0x0B:"0",0x0C:"-",0x0D:"=",0x0E:"Yen",0x0F:"Backspace",
+0x10:"Tab",0x11:"Q",0x12:"W",0x13:"E",0x14:"R",0x15:"T",0x16:"Y",0x17:"U",0x18:"I",0x19:"O",0x1A:"P",0x1B:"[",0x1C:"]",0x1D:"\\",0x1E:"Caps",
+0x1F:"A",0x20:"S",0x21:"D",0x22:"F",0x23:"G",0x24:"H",0x25:"J",0x26:"K",0x27:"L",0x28:";",0x29:"'",0x2A:"ISO#",0x2B:"Enter",0x2C:"LShift",0x2D:"ISO<",
+0x2E:"Z",0x2F:"X",0x30:"C",0x31:"V",0x32:"B",0x33:"N",0x34:"M",0x35:",",0x36:".",0x37:"/",0x38:"Ro",0x39:"RShift",0x3A:"LCtrl",0x3B:"LWin",0x3C:"LAlt",
+0x3D:"Space",0x3E:"RAlt",0x3F:"RWin",0x40:"RCtrl",0x41:"Menu",0x4B:"Insert",0x4C:"Delete",0x4F:"Left",0x50:"Home",0x51:"End",0x53:"Up",0x54:"Down",
+0x55:"PgUp",0x56:"PgDn",0x59:"Right",0x5A:"NumLock",0x5B:"KP7",0x5C:"KP4",0x5D:"KP1",0x5F:"KP/",0x60:"KP8",0x61:"KP5",0x62:"KP2",0x63:"KP0",0x64:"KP*",
+0x65:"KP9",0x66:"KP6",0x67:"KP3",0x68:"KP.",0x69:"KP-",0x6A:"KP+",0x6C:"KPEnter",0x6E:"Esc",0x7C:"PrtSc",0x7D:"ScrLk",0x7E:"Pause"};
+for (let i=0;i<12;i++) AT[0x70+i] = "F"+(i+1);
+for (let i=0;i<12;i++) AT[0x80+i] = "Ext"+(i+1).toString().padStart(2,"0");
+for (let i=0;i<16;i++){ AT[0x90+i] = "ExtR"+i.toString(16).toUpperCase(); AT[0xA0+i] = "ExtL"+i.toString(16).toUpperCase(); }
+const NAME2AT = {};
+for (const [k,v] of Object.entries(AT)) NAME2AT[v.toLowerCase()] = +k;
+Object.assign(NAME2AT,{"ctrl":0x3A,"shift":0x2C,"alt":0x3C,"altgr":0x3E,"win":0x3B,"lctrl":0x3A,"rctrl":0x40,"lalt":0x3C,"ralt":0x3E,"lshift":0x2C,"rshift":0x39,"esc":0x6E,"del":0x4C,"ins":0x4B,"space":0x3D,"enter":0x2B,"bs":0x0F,"<":0x2D});
+
+/* ---------- Physical MK06 plan: [internal key no, x, y, w, h, label] in key units ---------- */
+const PLAN = [];
+const add = (i,x,y,w,h,l)=>PLAN.push([i,x,y,w||1,h||1,l]);
+/* Keypads: 0x90-0x9F is the RIGHT keypad, 0xA0-0xAF the LEFT one, row by row
+   (test screen "ADR/ADL nn" = base + nn - 1). A double-wide key reports its right-hand cell. */
+const KEYPADS = {
+  0x04: [[1,2,"Cancel"],[2,1,"Print"],[3,1,"Conn Dflt"],[4,1,"Cmdty"],[5,1,"Index"],[6,1,"Crncy"],[7,1,"Client"],[8,1,"M-Mkt"],[9,1,"Muni"],[10,1,"Pfd"],[11,1,"Equity"],[12,1,"Govt"],[13,1,"Corp"],[14,1,"Mtge"],[15,1,"GO"]],
+  0x0B: [[1,2,"Interrupt"],[3,2,"Cancel Orders"],[5,2,"Contact"],[7,2,"Accept"],[8,1,"09"],[9,1,"0A"],[10,1,"0B"],[11,1,"0C"],[13,2,"Zone Yours"],[15,2,"Fmt Mine"]],
+};
+KEYPADS[0x01] = KEYPADS[0x0B];
+function keypadPlan(){
+  const out=[];
+  const side=(base,x0,id,pfx)=>{
+    const def=KEYPADS[id];
+    if (!def){ for(let i=0;i<16;i++) out.push([base+i, x0+i%4, Math.floor(i/4),1,1, hex2(i+1)]); return; }
+    for (const [cell,w,label] of def) out.push([base+cell, x0+(cell%4)-(w-1), Math.floor(cell/4), w,1, label]);
+  };
+  side(0xA0, 0, hdr?hdr.kpL:0, "ADL");
+  side(0x90, 18.5, hdr?hdr.kpR:0, "ADR");
+  return out;
+}
+for (let i=0;i<12;i++) add(0x80+i, 5.25+i, 0, 1,1, "LCD "+(i+1));
+add(0x6E,0,4.5,1,1,"Esc");
+[0x72,0x73,0x74,0x75,0x76,0x77,0x79,0x7A,0x7B,0x7C,0x7D,0x7E].forEach((k,i)=>add(k,5.25+i,4.5,1,1,"F"+(i+1)));
+const Y=5.9;
+["`","1","2","3","4","5","6","7","8","9","0","-","="].forEach((l,i)=>add(0x01+i,i,Y,1,1,l)); add(0x0F,13,Y,2,1,"Backsp");
+add(0x10,0,Y+1,1.5,1,"Tab"); ["Q","W","E","R","T","Y","U","I","O","P","[","]"].forEach((l,i)=>add(0x11+i,1.5+i,Y+1,1,1,l)); add(0x2B,13.75,Y+1,1.25,2,"Enter");
+add(0x1E,0,Y+2,1.75,1,"Caps"); ["A","S","D","F","G","H","J","K","L",";","'"].forEach((l,i)=>add(0x1F+i,1.75+i,Y+2,1,1,l)); add(0x2A,12.75,Y+2,1,1,"ISO#");
+add(0x2C,0,Y+3,1.25,1,"LShift"); add(0x2D,1.25,Y+3,1,1,"ISO<"); ["Z","X","C","V","B","N","M",",",".","/"].forEach((l,i)=>add(0x2E+i,2.25+i,Y+3,1,1,l)); add(0x39,12.25,Y+3,2.75,1,"RShift");
+[[0x3A,"LCtrl",1.25],[0x3B,"LWin",1.25],[0x3C,"LAlt",1.25],[0x3D,"Space",6.25],[0x0E,"AltGr",1.25],[0x3E,"RWin",1.25],[0x3F,"Menu",1.25],[0x40,"RCtrl",1.25]].reduce((x,[k,l,w])=>{add(k,x,Y+4,w,1,l);return x+w;},0);
+[[0x4B,"PrtSc"],[0x50,"ScrLk"],[0x55,"Pause"]].forEach(([k,l],i)=>add(k,15.25+i,4.5,1,1,l));
+[[0x4C,"Ins"],[0x51,"Home"],[0x56,"PgUp"]].forEach(([k,l],i)=>add(k,15.25+i,Y,1,1,l));
+[[0x4D,"Del"],[0x52,"End"],[0x57,"PgDn"]].forEach(([k,l],i)=>add(k,15.25+i,Y+1,1,1,l));
+add(0x53,16.25,Y+3,1,1,"Up"); [[0x4F,"Left"],[0x54,"Down"],[0x59,"Right"]].forEach(([k,l],i)=>add(k,15.25+i,Y+4,1,1,l));
+[[0x5A,"Num"],[0x5F,"/"],[0x64,"*"],[0x69,"-"]].forEach(([k,l],i)=>add(k,18.5+i,Y,1,1,l));
+[[0x5B,"7"],[0x60,"8"],[0x65,"9"]].forEach(([k,l],i)=>add(k,18.5+i,Y+1,1,1,l)); add(0x6A,21.5,Y+1,1,2,"+");
+[[0x5C,"4"],[0x61,"5"],[0x66,"6"]].forEach(([k,l],i)=>add(k,18.5+i,Y+2,1,1,l));
+[[0x5D,"1"],[0x62,"2"],[0x67,"3"]].forEach(([k,l],i)=>add(k,18.5+i,Y+3,1,1,l)); add(0x6C,21.5,Y+3,1,2,"Enter");
+add(0x5E,18.5,Y+4,2,1,"0"); add(0x68,20.5,Y+4,1,1,".");
+let PHYS = {};
+function fullPlan(){ const all=PLAN.concat(keypadPlan()); PHYS={}; all.forEach(p=>PHYS[p[0]]=p[5]);
+  for(let i=0;i<16;i++){ if(!(0x90+i in PHYS)) PHYS[0x90+i]=`ADR ${hex2(i+1)} (unused half of a double key)`; if(!(0xA0+i in PHYS)) PHYS[0xA0+i]=`ADL ${hex2(i+1)} (unused half of a double key)`; }
+  return all; }
+const KEYPAD_IDS = {0:"None / cover",1:"Reuters D2000",2:"RD2 custom / RD3 Matching",3:"CDR / EBS",4:"Bloomberg",5:"RD3000 (SCB)",6:"RD3000 (RRO)",7:"EUREX",8:"RD2000 (MPS)",9:"RD3000 (RTD)",10:"SUN",11:"RD3000 standard",12:"RD3000 Danske",13:"Bloomberg USB",14:"Deskswitch",15:"Custom"};
+
+/* ---------- Turkish Q text -> key positions ---------- */
+/* ---------- text -> key positions, per host keyboard layout ---------- */
+function mkLayout(rows){ const m={}; for (const [chars,start,mod] of rows){ [...chars].forEach((ch,i)=>{ if(ch!=="\u0000") m[ch]=[Array.isArray(start)?start[i]:start+i, mod]; }); } return m; }
+const COMMON = [["1234567890",0x02,""],[" ",0x3D,""],["\n",0x2B,""],["\t",0x10,""]];
+const LAYOUTS = {
+  "US": mkLayout([...COMMON,
+    ["qwertyuiop",0x11,""],["QWERTYUIOP",0x11,"S"],["asdfghjkl",0x1F,""],["ASDFGHJKL",0x1F,"S"],["zxcvbnm",0x2E,""],["ZXCVBNM",0x2E,"S"],
+    ["`-=[]\\;',./",[0x01,0x0C,0x0D,0x1B,0x1C,0x2A,0x28,0x29,0x35,0x36,0x37],""],
+    ["~!@#$%^&*()_+{}|:\"<>?",[0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x1B,0x1C,0x2A,0x28,0x29,0x35,0x36,0x37],"S"]]),
+  "Turkish Q": mkLayout([...COMMON,
+    ["qwertyuıopğü",0x11,""],["QWERTYUIOPĞÜ",0x11,"S"],["asdfghjklşi",0x1F,""],["ASDFGHJKLŞİ",0x1F,"S"],["zxcvbnmöç",0x2E,""],["ZXCVBNMÖÇ",0x2E,"S"],
+    ["\"*-,.<",[0x01,0x0C,0x0D,0x2A,0x37,0x2D],""],
+    ["é!'^+%&/()=?_;:>",[0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x2A,0x37,0x2D],"S"],
+    ["£#$½{[]}\\|@€~`",[0x03,0x04,0x05,0x06,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x11,0x13,0x1C,0x2A],"G"]]),
+};
+let layoutName = "US";
+
+/* ---------- state ---------- */
+let orig = null;          // Uint8Array, the loaded file
+let model = null;         // [NKEYS][4] cells: {w} or {seq:[words], ptr}
+let hdr = null;           // {name, kpL, kpR}
+let fileName = "";
+let sel = 0x1F;
+let viewCol = 0;
+
+const $ = id => document.getElementById(id);
+const hex2 = n => n.toString(16).toUpperCase().padStart(2,"0");
+const hex4 = n => n.toString(16).toUpperCase().padStart(4,"0");
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+const rd16 = (b,o) => (b[o]<<8)|b[o+1];
+function readSeq(b, off){ const out=[]; for(let a=STR_BASE+off; a+1<b.length; a+=2){ const w=rd16(b,a); if(!w) break; out.push(w); if(out.length>400) break;} return out; }
+function cellFromWord(b,w){ return (w>>12)===8 ? {seq:readSeq(b,w&0x7FFF), ptr:w&0x7FFF} : {w}; }
+function keyName(c){ return AT[c] ?? ("k"+hex2(c)); }
+
+function load(buf, name){
+  const b = new Uint8Array(buf);
+  if (b.length !== FILE_SIZE){ toast(`This file is ${b.length} bytes; KCT files are 4096 bytes.`); return; }
+  orig = b; fileName = name;
+  model = [];
+  for (let i=0;i<NKEYS;i++){ const row=[]; for(let c=0;c<4;c++) row.push(cellFromWord(b, rd16(b, MAIN+i*8+c*2))); model.push(row); }
+  hdr = {name: new TextDecoder("latin1").decode(b.slice(3,27)).replace(/[\s\0]+$/,""), kpL:b[0x24], kpR:b[0x23]};
+  $("hName").value = hdr.name;
+  $("hKpL").value = String(hdr.kpL); $("hKpR").value = String(hdr.kpR);
+  $("hNo").textContent = `${b[0x2F]} / ${b[0x30]}`;
+  const types={0x12:"PC",0x14:"Reuters D2000",0x15:"Bloomberg",0x11:"SUN",0x17:"EBM",0x1F:"DAV",0x21:"Reuters 3000 / seri",0x25:"FX"};
+  $("hType").textContent = `${hex2(b[1])} · ${types[b[1]]||"bilinmiyor"} · ${b[2]?"seri":"PC"}`;
+  $("hCountry").textContent = `${hex2(b[0x1B])}${b[0x1B]===1?" · US":b[0x1B]===0?" · international":""}`;
+  $("filePill").textContent = name;
+  $("work").hidden = false;
+  renderAll();
+}
+
+/* ---------- describe words ---------- */
+function modsOf(hi){ const m=[]; if(hi&2)m.push("Shift"); if(hi&4)m.push("Ctrl"); if(hi&8)m.push("AltGr"); return m; }
+function describe(cell, short){
+  if (cell.seq) return short ? "seq" : "Sequence: "+seqToText(cell.seq);
+  const w=cell.w, hi=w>>8, lo=w&0xFF;
+  if (!w) return "—";
+  if ((hi&0xF0)===0x40){ const m=modsOf(hi); return (m.length?m.join("+")+"+":"")+keyName(lo)+((hi&1)&&!short?" (exact)":""); }
+  if (w===0xC000) return "special";
+  if (hi===0x01) return "#"+hex2(lo);
+  if ((hi&0xF0)===0x50) return "chr "+hex2(lo);
+  return hex4(w);
+}
+function kindOf(cell){ if(cell.seq) return "seq"; const w=cell.w; if(!w) return "none"; if(((w>>8)&0xF0)===0x40) return "key"; if(w===0xC000) return "special"; return "raw"; }
+function cellEq(a,b){ if(!!a.seq!==!!b.seq) return false; if(a.seq) return a.seq.length===b.seq.length && a.seq.every((x,i)=>x===b.seq[i]); return a.w===b.w; }
+function origCell(i,c){ return cellFromWord(orig, rd16(orig, MAIN+i*8+c*2)); }
+function changed(i){ for(let c=0;c<4;c++) if(!cellEq(model[i][c], origCell(i,c))) return true; return false; }
+
+/* ---------- sequences: text <-> words ---------- */
+function seqToText(words){
+  const out=[];
+  for (let i=0;i<words.length;i++){
+    const w=words[i], hi=w>>8, lo=w&0xFF;
+    if (hi===0x40 && words[i+1]===(0xC000|lo)){ out.push(tok(keyName(lo))); i++; continue; }
+    if (hi===0x40) out.push("+"+tok(keyName(lo)));
+    else if (hi===0xC0) out.push("-"+tok(keyName(lo)));
+    else if (hi===0x01) out.push("#"+hex2(lo));
+    else out.push("w"+hex4(w));
+  }
+  return out.join(" ");
+}
+function tok(n){ return /^[+\-#]/.test(n) || n.includes("+") ? "k"+hex2(NAME2AT[n.toLowerCase()]) : n; }
+function nameToCode(n){
+  const l=n.toLowerCase();
+  if (l in NAME2AT) return NAME2AT[l];
+  const m=/^k([0-9a-f]{2})$/i.exec(n); if (m) return parseInt(m[1],16);
+  return null;
+}
+function parseSeq(text){
+  const words=[]; const parts=text.trim().split(/\s+/).filter(Boolean);
+  for (const p of parts){
+    let m;
+    if ((m=/^#([0-9a-f]{2})$/i.exec(p))){ words.push(0x0100|parseInt(m[1],16)); continue; }
+    if ((m=/^w([0-9a-f]{4})$/i.exec(p))){ words.push(parseInt(m[1],16)); continue; }
+    const whole = nameToCode(p);
+    if (whole!==null){ words.push(0x4000|whole, 0xC000|whole); continue; }
+    if (p.length>1 && (p[0]==="+"||p[0]==="-")){
+      const c=nameToCode(p.slice(1)); if (c===null) throw new Error(`Unknown key “${p.slice(1)}”`);
+      words.push((p[0]==="+"?0x4000:0xC000)|c); continue;
+    }
+    if (p.includes("+")){
+      const ks=p.split("+").map(nameToCode);
+      if (ks.some(k=>k===null)) throw new Error(`Unknown chord “${p}”`);
+      ks.forEach(k=>words.push(0x4000|k)); ks.slice().reverse().forEach(k=>words.push(0xC000|k)); continue;
+    }
+    throw new Error(`Unknown token “${p}”`);
+  }
+  return words;
+}
+function textToKeys(str, layout){
+  const out=[], bad=new Set();
+  for (const ch of str){
+    const e=layout[ch]; if(!e){ bad.add(ch); continue; }
+    const [k,mod]=e, n=tok(keyName(k));
+    out.push(mod==="S" ? "LShift+"+n : mod==="G" ? "AltGr+"+n : n);
+  }
+  return {text: out.join(" "), bad:[...bad]};
+}
+
+/* ---------- build output file ---------- */
+function stringEnd(b){
+  let last=-1; for (let a=FILE_SIZE-1; a>=STR_BASE; a--) if (b[a]){ last=a; break; }
+  if (last<0) return STR_BASE;
+  let e=last+1; if (e&1) e++; return e+2;
+}
+function build(){
+  const out = orig.slice();
+  const nm = (hdr.name||"").replace(/[^\x20-\x7E]/g,"?").slice(0,24).padEnd(24," ");
+  for (let i=0;i<24;i++) out[3+i]=nm.charCodeAt(i);
+  out[0x23]=hdr.kpR; out[0x24]=hdr.kpL;
+  let alloc = stringEnd(orig); const placed = new Map(); let added = 0;
+  for (let i=0;i<NKEYS;i++) for (let c=0;c<4;c++){
+    const cell=model[i][c]; let w;
+    if (cell.seq){
+      if (!cell.seq.length) w=0;
+      else if (cell.ptr!=null && cellEq(cell, {seq:readSeq(orig,cell.ptr)})) w=0x8000|cell.ptr;
+      else {
+        const key=cell.seq.join(",");
+        if (!placed.has(key)){
+          const need=(cell.seq.length+1)*2;
+          if (alloc+need>FILE_SIZE) throw new Error("The sequence area is full.");
+          cell.seq.forEach((x,j)=>{ out[alloc+j*2]=x>>8; out[alloc+j*2+1]=x&0xFF; });
+          out[alloc+cell.seq.length*2]=0; out[alloc+cell.seq.length*2+1]=0;
+          placed.set(key, alloc-STR_BASE); alloc+=need; added+=need;
+        }
+        w=0x8000|placed.get(key);
+      }
+    } else w=cell.w;
+    out[MAIN+i*8+c*2]=w>>8; out[MAIN+i*8+c*2+1]=w&0xFF;
+  }
+  return {bytes:out, end:alloc, added};
+}
+
+/* ---------- rendering ---------- */
+function renderKbd(){
+  const kbd=$("kbd"); const u=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--u"))||42;
+  kbd.style.width=(22.5*u)+"px"; kbd.style.height=((Y+5)*u)+"px";
+  let html=`<span class="zone" style="left:0;top:${4*u-2}px">Left keypad</span><span class="zone" style="left:${18.5*u}px;top:${4*u-2}px">Right keypad</span><span class="zone" style="left:${5.25*u}px;top:${1*u+6}px">LCD soft keys</span>`;
+  for (const [i,x,y,w,h,l] of fullPlan()){
+    const cell=model[i][viewCol], k=kindOf(cell);
+    const cls=["key", k==="none"?"un":k==="seq"?"sq":k==="special"?"sp":"", changed(i)?"ch":"", i===sel?"sel":""].join(" ");
+    html+=`<button class="${cls}" data-k="${i}" style="left:${x*u}px;top:${y*u}px;width:${w*u-4}px;height:${h*u-4}px" title="${esc(l)} · 0x${hex2(i)} · ${esc(describe(cell,false))}"><span class="ph">${esc(l)}</span><span class="ac">${esc(describe(cell,true))}</span></button>`;
+  }
+  kbd.innerHTML=html;
+}
+function renderList(){
+  const only=$("onlyUsed").checked; let h="";
+  for (let i=0;i<NKEYS;i++){
+    const row=model[i]; if (only && row.every(c=>!c.seq&&!c.w)) continue;
+    h+=`<tr data-k="${i}" class="${i===sel?"sel":""}"><td class="mono ${changed(i)?"ch":""}">${hex2(i)}</td><td>${esc(PHYS[i]||"—")}</td>${row.map(c=>`<td class="mono">${esc(describe(c,false))}</td>`).join("")}</tr>`;
+  }
+  $("allBody").innerHTML=h;
+}
+function keyOptions(selCode){
+  const groups=[["Letters, digits, symbols",[...Array(0x37).keys()].map(x=>x+1).filter(x=>![0x0E,0x0F,0x10,0x1E,0x2B,0x2C,0x2D].includes(x))],
+    ["Control",[0x0F,0x10,0x1E,0x2B,0x2C,0x39,0x3A,0x3B,0x3C,0x3D,0x3E,0x3F,0x40,0x41,0x6E,0x2D,0x38,0x0E]],
+    ["Function keys",[...Array(12).keys()].map(x=>0x70+x)],
+    ["Navigation",[0x4B,0x4C,0x50,0x51,0x55,0x56,0x53,0x54,0x4F,0x59,0x7C,0x7D,0x7E]],
+    ["Numpad",[0x5A,0x5F,0x64,0x69,0x5B,0x60,0x65,0x6A,0x5C,0x61,0x66,0x5D,0x62,0x67,0x6C,0x63,0x68]],
+    ["Extra (QMK matrix)",[...Array(12).keys()].map(x=>0x80+x).concat([...Array(32).keys()].map(x=>0x90+x))]];
+  const seen=new Set(); let h="";
+  for (const [g,list] of groups){ h+=`<optgroup label="${g}">`; for (const c of list){ if(seen.has(c)) continue; seen.add(c);
+    h+=`<option value="${c}"${c===selCode?" selected":""}>${esc(keyName(c))} · ${hex2(c)}</option>`; } h+="</optgroup>"; }
+  if (!seen.has(selCode)) h+=`<option value="${selCode}" selected>k${hex2(selCode)}</option>`;
+  return h;
+}
+function renderIns(){
+  const i=sel, row=model[i];
+  let h=`<h2>${esc(PHYS[i]||"Key")}<span class="mono">internal 0x${hex2(i)}</span></h2>
+  <div class="row"><button class="btn small" data-act="copy0">Copy Plain to all columns</button><button class="btn small" data-act="revert"${changed(i)?"":" disabled"}>Revert key</button></div>`;
+  row.forEach((cell,c)=>{
+    const k=kindOf(cell);
+    h+=`<div class="col" data-c="${c}"><div class="colhead"><span class="lbl">${COLS[c]}</span>
+      <select id="kind${c}" data-f="kind" aria-label="${COLS[c]} column type">
+        ${[["none","Unassigned"],["key","Key"],["seq","Key sequence"],["special","Special (keyboard)"],["raw","Raw word"]].map(([v,t])=>`<option value="${v}"${v===k?" selected":""}>${t}</option>`).join("")}
+      </select></div>`;
+    if (k==="key"){
+      const hi=cell.w>>8, lo=cell.w&0xFF;
+      h+=`<select id="tgt${c}" data-f="tgt" aria-label="Key to send">${keyOptions(lo)}</select>
+      <div class="mods">${[[2,"Shift"],[4,"Ctrl"],[8,"AltGr"],[1,"Exact"]].map(([b,t])=>`<label><input type="checkbox" id="m${c}_${b}" data-f="mod" data-b="${b}"${hi&b?" checked":""}>${t}</label>`).join("")}</div>
+      <div class="hint">With “Exact”, modifiers you are holding are released for this keystroke; without it they are added.</div>`;
+    } else if (k==="seq"){
+      h+=`<textarea id="seq${c}" data-f="seq" spellcheck="false" aria-label="Key sequence">${esc(seqToText(cell.seq))}</textarea><div class="err" id="seqErr${c}"></div>
+      <div class="row"><input id="trq${c}" placeholder="Text to type" aria-label="Text to add to the sequence"><select id="lay${c}" class="btn small" aria-label="Keyboard layout">${Object.keys(LAYOUTS).map(n=>`<option${n===layoutName?" selected":""}>${n}</option>`).join("")}</select><button class="btn small" data-act="trq" data-c="${c}">Add text</button></div>
+      <div class="hint">${cell.seq.length} steps · ${(cell.seq.length+1)*2} bytes</div>`;
+    } else if (k==="special"){
+      h+=`<div class="hint">The keyboard handles this key through its own table (modifiers, Tab, Caps, F keys). Safest to leave it as is.</div>`;
+    } else if (k==="raw"){
+      h+=`<input id="raw${c}" class="mono" data-f="raw" value="${hex4(cell.w)}" maxlength="4" aria-label="Raw word (hex)"><div class="hint">${esc(describe(cell,false))}</div>`;
+    } else {
+      h+=`<div class="hint">The keyboard runs its own user macro on this key; without one it sends nothing.</div>`;
+    }
+    h+=`</div>`;
+  });
+  if (i>=0x90){ h+=`<div class="hint">Keypad keys only follow the table when the keypad IDs in the header are not 00. Set them to the installed keypads (shown under Software Info, e.g. 04 Bloomberg, 0B Reuters).</div>`; }
+  $("ins").innerHTML=h;
+}
+function renderSide(){
+  let r; try { r=build(); } catch(e){ r={err:e.message}; }
+  const total=FILE_SIZE-STR_BASE;
+  const used = r.err ? total : (r.end-STR_BASE);
+  $("meter").classList.toggle("over", !!r.err);
+  $("meter").firstElementChild.style.width=Math.min(100, used/total*100)+"%";
+  const shown=Math.min(used,total), left=Math.max(0,total-used);
+  $("meterTxt").textContent = r.err ? r.err+" Shorten some sequences." : `${shown} / ${total} bytes used${r.added?` (+${r.added} from your edits)`:""} · room for about ${Math.floor(left/4)} more keystrokes`;
+  $("saveBtn").disabled=!!r.err;
+  const ch=[]; for (let i=0;i<NKEYS;i++) if (changed(i)) ch.push(i);
+  const hdrCh = hdr.name!==new TextDecoder("latin1").decode(orig.slice(3,27)).replace(/[\s\0]+$/,"") || hdr.kpL!==orig[0x24] || hdr.kpR!==orig[0x23];
+  $("changes").innerHTML = (hdrCh?`<li class="hint">Header changed</li>`:"") + (ch.length ? ch.map(i=>`<li><button data-k="${i}"><span class="mono">${hex2(i)}</span><span>${esc(PHYS[i]||"—")}: ${esc(describe(origCell(i,0),true))} → ${esc(describe(model[i][0],false))}</span></button></li>`).join("") : (hdrCh?"":`<li class="hint">No changes yet.</li>`));
+}
+function renderAll(){ fullPlan(); renderKbd(); if(!$("listView").hidden) renderList(); renderIns(); renderSide(); }
+function refresh(){ renderKbd(); if(!$("listView").hidden) renderList(); renderSide(); }
+
+/* ---------- events ---------- */
+function select(i){ sel=i; renderAll(); }
+$("kbd").addEventListener("click",e=>{ const b=e.target.closest("[data-k]"); if(b) select(+b.dataset.k); });
+$("allBody").addEventListener("click",e=>{ const r=e.target.closest("[data-k]"); if(r) select(+r.dataset.k); });
+$("changes").addEventListener("click",e=>{ const b=e.target.closest("[data-k]"); if(b) select(+b.dataset.k); });
+$("colView").addEventListener("change",e=>{ viewCol=+e.target.value; refresh(); });
+$("onlyUsed").addEventListener("change",renderList);
+function setTab(list){ $("tabKbd").setAttribute("aria-selected",String(!list)); $("tabList").setAttribute("aria-selected",String(list)); $("kbdView").hidden=list; $("listView").hidden=!list; if(list) renderList(); }
+$("tabKbd").addEventListener("click",()=>setTab(false)); $("tabList").addEventListener("click",()=>setTab(true));
+
+$("ins").addEventListener("change",e=>{
+  const col=e.target.closest(".col"); if(!col) return; const c=+col.dataset.c, cell=model[sel][c], f=e.target.dataset.f;
+  if (f==="kind"){
+    const v=e.target.value;
+    model[sel][c] = v==="none"?{w:0}: v==="key"?{w:0x4000|(cellKeyGuess(sel))}: v==="seq"?{seq:[], ptr:null}: v==="special"?{w:0xC000}:{w:cell.seq?0:cell.w};
+    renderIns(); refresh(); return;
+  }
+  if (f==="tgt"){ model[sel][c]={w:(cell.w&0xFF00)|(+e.target.value)}; }
+  if (f==="mod"){ const b=+e.target.dataset.b; model[sel][c]={w: cell.w ^ (b<<8)}; }
+  if (f==="raw"){ const v=parseInt(e.target.value,16); if(!isNaN(v)&&v>=0&&v<=0xFFFF&&(v>>12)!==8) model[sel][c]={w:v}; else { toast("A raw word is 4 hex digits (8xxx is reserved for sequences)."); } renderIns(); }
+  refresh();
+});
+$("ins").addEventListener("input",e=>{
+  if (e.target.dataset.f!=="seq") return;
+  const c=+e.target.closest(".col").dataset.c;
+  try { const words=parseSeq(e.target.value); model[sel][c]={seq:words, ptr:model[sel][c].ptr}; $("seqErr"+c).textContent=""; refresh(); }
+  catch(err){ $("seqErr"+c).textContent=err.message; }
+});
+$("ins").addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]"); if(!b) return;
+  if (b.dataset.act==="copy0"){ for(let c=1;c<4;c++) model[sel][c]=JSON.parse(JSON.stringify(model[sel][0])); renderAll(); }
+  if (b.dataset.act==="revert"){ for(let c=0;c<4;c++) model[sel][c]=origCell(sel,c); renderAll(); }
+  if (b.dataset.act==="trq"){
+    const c=+b.dataset.c, inp=$("trq"+c); layoutName=$("lay"+c).value; const r=textToKeys(inp.value, LAYOUTS[layoutName]);
+    if (r.bad.length) toast(`No key for these characters in ${layoutName}: `+r.bad.join(" "));
+    const ta=$("seq"+c); ta.value=(ta.value.trim()+" "+r.text).trim(); ta.dispatchEvent(new Event("input",{bubbles:true}));
+    inp.value=""; renderIns();
+  }
+});
+function cellKeyGuess(i){ const o=origCell(i,0); return (!o.seq && ((o.w>>8)&0xF0)===0x40) ? (o.w&0xFF) : (AT[i]?i:0x1F); }
+
+$("hName").addEventListener("input",e=>{ hdr.name=e.target.value.replace(/[^\x20-\x7E]/g,""); renderSide(); });
+["hKpL","hKpR"].forEach(id=>{ $(id).innerHTML=Object.entries(KEYPAD_IDS).map(([v,t])=>`<option value="${v}">${hex2(+v)} · ${t}</option>`).join("");
+  $(id).addEventListener("change",e=>{ hdr[id==="hKpL"?"kpL":"kpR"]=+e.target.value; renderAll(); }); });
+
+$("fileIn").addEventListener("change",async e=>{ const f=e.target.files[0]; if(f) load(await f.arrayBuffer(), f.name); e.target.value=""; });
+const drop=$("drop");
+["dragenter","dragover"].forEach(t=>document.addEventListener(t,e=>{ e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(t=>document.addEventListener(t,e=>{ e.preventDefault(); if(t==="drop"||e.target===document.documentElement) drop.classList.remove("over"); }));
+document.addEventListener("drop",async e=>{ const f=e.dataTransfer?.files?.[0]; drop.classList.remove("over"); if(f) load(await f.arrayBuffer(), f.name); });
+
+/* ---------- zip (stored) + save ---------- */
+const DL = (async()=>{ try{ return window.claude?.use ? await window.claude.use("downloads") : null; }catch(_){ return null; } })();
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(b){ let c=0xFFFFFFFF; for(const x of b) c=CRC[(c^x)&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipOne(name, data){
+  const nb=new TextEncoder().encode(name), crc=crc32(data), n=data.length;
+  const lh=new Uint8Array(30+nb.length), dv=new DataView(lh.buffer);
+  dv.setUint32(0,0x04034b50,true); dv.setUint16(4,10,true); dv.setUint16(8,0,true); dv.setUint32(14,crc,true); dv.setUint32(18,n,true); dv.setUint32(22,n,true); dv.setUint16(26,nb.length,true); lh.set(nb,30);
+  const cd=new Uint8Array(46+nb.length), cv=new DataView(cd.buffer);
+  cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,10,true); cv.setUint32(16,crc,true); cv.setUint32(20,n,true); cv.setUint32(24,n,true); cv.setUint16(28,nb.length,true); cv.setUint32(42,0,true); cd.set(nb,46);
+  const end=new Uint8Array(22), ev=new DataView(end.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,1,true); ev.setUint16(10,1,true); ev.setUint32(12,cd.length,true); ev.setUint32(16,lh.length+n,true);
+  const out=new Uint8Array(lh.length+n+cd.length+22); out.set(lh,0); out.set(data,lh.length); out.set(cd,lh.length+n); out.set(end,lh.length+n+cd.length); return out;
+}
+function outName(){ const no=String(orig[0x2F]).padStart(2,"0"); const nm=(hdr.name||"TABLE").trim().replace(/[^A-Za-z0-9_-]/g,"_")||"TABLE"; return `KCT${no}_${nm}.kct`; }
+$("saveBtn").addEventListener("click",async()=>{
+  let r; try{ r=build(); }catch(e){ toast(e.message); return; }
+  const kct=outName(), zip=zipOne(kct, r.bytes), zipName=kct.replace(/\.kct$/,".zip");
+  const dl = await DL;
+  if (dl){
+    try{ await dl.save({filename:zipName, data:new Blob([zip])}); toast(`Saved ${zipName}. Load the ${kct} inside it into the keyboard.`); }
+    catch(e){ if(e && e.code!=="declined") toast("Could not save: "+(e.message||e.code)); }
+    return;
+  }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([zip],{type:"application/zip"})); a.download=zipName; document.body.appendChild(a); a.click(); a.remove();
+  toast(`Downloaded ${zipName}.`);
+});
+let tt; function toast(m){ const t=$("toast"); t.textContent=m; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,4200); }
+
+/* ---------- start with the sample ---------- */
+$("saveBtn").disabled = true;
+</script>
+</body>
+</html>
