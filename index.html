@@ -10,6 +10,7 @@
 <style>
 /* Layout: tool bar on top, keyboard plan as the main surface, inspector beside it (stacks below on narrow screens). */
 :root{
+  --lcd-bezel:#2b3034; --lcd-muted:#aab4bb;
   --bg:#eceef0; --panel:#ffffff; --ink:#1b2126; --muted:#5f6a73; --line:#d3d8dc;
   --key:#f8f9f9; --key-edge:#bfc6cc; --accent:#0d7a6b; --accent-ink:#ffffff;
   --changed:#b86e00; --seq:#6c47c9; --special:#7c8790; --danger:#b3261e; --soft:#e3f1ee;
@@ -50,6 +51,11 @@ header.bar h1 small{font-family:var(--f-mono);font-weight:500;font-size:12px;col
 .hdr{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px;padding:14px 16px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .field label,.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.states{grid-column:span 2;min-width:0}
+.strow{display:flex;flex-wrap:wrap;gap:6px 10px}
+.strow .st{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.strow input{width:3.6em!important;padding:5px 6px!important;text-align:center}
+.strow select{width:auto!important;padding:5px 4px!important}
 .field input,.field select,.ins select,.ins input,.ins textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0;width:100%}
 .ro{font-family:var(--f-mono);font-size:13px;padding-block:6px}
 .main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;align-items:start}
@@ -114,6 +120,19 @@ table.all tr.sel td{background:var(--soft)}
 table.all td.ch{color:var(--changed);font-weight:600}
 .syntax{font-size:12px;color:var(--muted);line-height:1.6}
 .syntax code{font-family:var(--f-mono);font-size:11.5px;background:var(--bg);padding:0 4px;border-radius:3px}
+.lcd-scroll{overflow-x:auto}
+.lcd{display:grid;grid-template-columns:repeat(12,minmax(64px,1fr));gap:6px;min-width:800px;padding:12px;border-radius:8px;background:var(--lcd-bezel)}
+.lcd .band{grid-column:1/-1;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--lcd-muted);padding:2px 2px}
+.lcell{border:1px solid var(--key-edge);border-radius:4px;padding:4px 3px;font-family:var(--f-mono);font-size:11.5px;line-height:1.25;cursor:pointer;text-align:left;color:#111;min-height:62px}
+.lcell span{display:block;white-space:pre;overflow:hidden}
+.lcell i{font-style:normal;background:#111;color:#fff}
+.lcell.c0{background:#f4f5f2}.lcell.c1{background:#9fdc8f}.lcell.c2{background:#f2938a}.lcell.c3{background:#f4dc6a}
+.lcell.ed{outline:2px solid var(--changed);outline-offset:1px}
+.lcell.sel{outline:2.5px solid var(--accent);outline-offset:1px}
+.lcell .no{font-size:9.5px;color:#555;font-family:var(--f-body)}
+.layform{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px;align-items:end}
+.layform .ln{display:flex;gap:8px;align-items:center}
+.layform input[type=text]{font-family:var(--f-mono);width:9ch;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
 .toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;max-width:calc(100% - 32px)}
 @media (prefers-reduced-motion:no-preference){.key{transition:border-color .12s}}
 </style>
@@ -129,14 +148,15 @@ table.all td.ch{color:var(--changed);font-weight:600}
     <button class="btn primary" id="saveBtn">Download (.zip)</button>
   </header>
 
-  <div class="drop" id="drop">Drop a Wey MK06 <span class="mono">.kct</span> keycode table here, or use “Open file”. Edited keys get an orange outline. “Download” gives you a zip with the edited <span class="mono">.kct</span> inside, ready to load into the keyboard.</div>
+  <div class="drop" id="drop">Drop a Wey MK06 <span class="mono">.kct</span> keycode table or a <span class="mono">LAYERnn.LAY</span> LCD layer here, or use the open buttons. Edited keys get an orange outline. “Download” gives you a zip with the edited <span class="mono">.kct</span> inside, ready to load into the keyboard.</div>
 
   <div id="work" hidden>
   <section class="panel hdr" aria-label="Table header">
     <div class="field"><label for="hName">Table name</label><input id="hName" class="mono" maxlength="24"></div>
     <div class="field"><label for="hKpL">Left keypad ID (0x24)</label><select id="hKpL"></select></div>
     <div class="field"><label for="hKpR">Right keypad ID (0x23)</label><select id="hKpR"></select></div>
-    <div class="field"><span class="lbl">KCT no. / base</span><span class="ro" id="hNo"></span></div>
+    <div class="field"><span class="lbl">KCT no.</span><span class="ro" id="hNo"></span></div>
+    <div class="field states"><span class="lbl">Prev/Next states · LCD layer / page</span><div class="strow" id="hStates"></div></div>
     <div class="field"><span class="lbl">Emulation type</span><span class="ro" id="hType"></span></div>
     <div class="field"><span class="lbl">Country code</span><span class="ro" id="hCountry"></span></div>
   </section>
@@ -149,6 +169,7 @@ table.all td.ch{color:var(--changed);font-weight:600}
         <span class="spacer"></span>
         <label class="hint" for="colView">Showing column</label>
         <select id="colView" class="btn small"><option value="0">Plain</option><option value="1">Shift</option><option value="2">Ctrl</option><option value="3">Alt</option></select>
+        <select id="layerView" class="btn small" aria-label="Layer shown on special keys"><option value="0">State 1</option><option value="1">State 2</option><option value="2">State 3</option><option value="3">State 4</option></select>
       </div>
       <div class="legend">
         <span><i class="sw"></i>Key</span>
@@ -183,6 +204,22 @@ table.all td.ch{color:var(--changed);font-weight:600}
     </section>
   </div>
   </div>
+
+  <section class="panel sect" id="laySect" aria-label="LCD layer">
+    <div class="row" style="gap:10px 14px">
+      <h3>LCD layer</h3>
+      <span class="file-pill" id="layName"></span>
+      <span class="spacer"></span>
+      <label class="hint" for="layPage">Page</label>
+      <select id="layPage" class="btn small"><option value="0">1</option><option value="1">2</option><option value="2">3</option><option value="3">4</option></select>
+      <label class="btn small" for="layIn">Open LAYER file</label>
+      <input type="file" id="layIn" accept=".lay,.LAY" hidden>
+      <button class="btn small primary" id="laySave" disabled>Download layer (.zip)</button>
+    </div>
+    <div class="hint" id="layHint">Open a <span class="mono">LAYERnn.LAY</span> file (or drop it on the page) to edit the LCD labels and key colours. The table header shows which layers a keycode table uses.</div>
+    <div class="lcd-scroll" id="lcdWrap" hidden><div class="lcd" id="lcd"></div></div>
+    <div id="layIns"></div>
+  </section>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -239,7 +276,7 @@ add(0x2C,0,Y+3,1.25,1,"LShift"); add(0x2D,1.25,Y+3,1,1,"ISO<"); ["Z","X","C","V"
 [[0x4B,"PrtSc"],[0x50,"ScrLk"],[0x55,"Pause"]].forEach(([k,l],i)=>add(k,15.25+i,4.5,1,1,l));
 [[0x4C,"Ins"],[0x51,"Home"],[0x56,"PgUp"]].forEach(([k,l],i)=>add(k,15.25+i,Y,1,1,l));
 [[0x4D,"Del"],[0x52,"End"],[0x57,"PgDn"]].forEach(([k,l],i)=>add(k,15.25+i,Y+1,1,1,l));
-add(0x53,16.25,Y+3,1,1,"Up"); [[0x4F,"Left"],[0x54,"Down"],[0x59,"Right"]].forEach(([k,l],i)=>add(k,15.25+i,Y+4,1,1,l));
+add(0x4E,15.25,Y+3,1,1,"Attach/Detach"); add(0x53,16.25,Y+3,1,1,"Up"); add(0x58,17.25,Y+3,1,1,"Prev/Next"); [[0x4F,"Left"],[0x54,"Down"],[0x59,"Right"]].forEach(([k,l],i)=>add(k,15.25+i,Y+4,1,1,l));
 [[0x5A,"Num"],[0x5F,"/"],[0x64,"*"],[0x69,"-"]].forEach(([k,l],i)=>add(k,18.5+i,Y,1,1,l));
 [[0x5B,"7"],[0x60,"8"],[0x65,"9"]].forEach(([k,l],i)=>add(k,18.5+i,Y+1,1,1,l)); add(0x6A,21.5,Y+1,1,2,"+");
 [[0x5C,"4"],[0x61,"5"],[0x66,"6"]].forEach(([k,l],i)=>add(k,18.5+i,Y+2,1,1,l));
@@ -275,6 +312,15 @@ let hdr = null;           // {name, kpL, kpR}
 let fileName = "";
 let sel = 0x1F;
 let viewCol = 0;
+let viewLayer = 0;        // which layer page the keyboard view shows for special keys
+let ext = null;           // special-key table: [slot][page*4+col]
+let insScope = "main";    // inspector scope: "main" or a layer page 0-3
+const EXT = 0x600;
+/* Fixed slot order of the special-key table (verified against the shipped tables) */
+const ORDER = [0x10,0x1E,0x2C,0x39,0x3A,0x3B,0x3C,0x0E,0x3E,0x3F,0x40, 0x72,0x73,0x74,0x75,0x76,0x77,0x79,0x7A,0x7B,0x7C,0x7D,0x7E, 0x80,0x81,0x82,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x8A,0x8B];
+const SLOT = {}; ORDER.forEach((k,n)=>SLOT[k]=n);
+const PAGES = ["State 1","State 2","State 3","State 4"];
+function stateLabel(n){ if(!hdr) return ""; const [l,pg]=hdr.states[n]; return n>0&&!l ? "off" : `LAYER${String(l).padStart(2,"0")} p${pg+1}`; }
 
 const $ = id => document.getElementById(id);
 const hex2 = n => n.toString(16).toUpperCase().padStart(2,"0");
@@ -291,10 +337,13 @@ function load(buf, name){
   orig = b; fileName = name;
   model = [];
   for (let i=0;i<NKEYS;i++){ const row=[]; for(let c=0;c<4;c++) row.push(cellFromWord(b, rd16(b, MAIN+i*8+c*2))); model.push(row); }
-  hdr = {name: new TextDecoder("latin1").decode(b.slice(3,27)).replace(/[\s\0]+$/,""), kpL:b[0x24], kpR:b[0x23]};
+  ext = ORDER.map((k,n)=>{ const row=[]; for(let j=0;j<16;j++) row.push(cellFromWord(b, rd16(b, EXT+n*32+j*2))); return row; });
+  insScope = isSpecial(sel) ? 0 : "main";
+  hdr = {name: new TextDecoder("latin1").decode(b.slice(3,27)).replace(/[\s\0]+$/,""), kpL:b[0x24], kpR:b[0x23], states:[0,1,2,3].map(n=>[b[0x30+n*8], b[0x31+n*8]])};
   $("hName").value = hdr.name;
   $("hKpL").value = String(hdr.kpL); $("hKpR").value = String(hdr.kpR);
-  $("hNo").textContent = `${b[0x2F]} / ${b[0x30]}`;
+  $("hNo").textContent = `${b[0x2F]}`;
+  renderStates();
   const types={0x12:"PC",0x14:"Reuters D2000",0x15:"Bloomberg",0x11:"SUN",0x17:"EBM",0x1F:"DAV",0x21:"Reuters 3000 / seri",0x25:"FX"};
   $("hType").textContent = `${hex2(b[1])} · ${types[b[1]]||"bilinmiyor"} · ${b[2]?"seri":"PC"}`;
   $("hCountry").textContent = `${hex2(b[0x1B])}${b[0x1B]===1?" · US":b[0x1B]===0?" · international":""}`;
@@ -318,7 +367,17 @@ function describe(cell, short){
 function kindOf(cell){ if(cell.seq) return "seq"; const w=cell.w; if(!w) return "none"; if(((w>>8)&0xF0)===0x40) return "key"; if(w===0xC000) return "special"; return "raw"; }
 function cellEq(a,b){ if(!!a.seq!==!!b.seq) return false; if(a.seq) return a.seq.length===b.seq.length && a.seq.every((x,i)=>x===b.seq[i]); return a.w===b.w; }
 function origCell(i,c){ return cellFromWord(orig, rd16(orig, MAIN+i*8+c*2)); }
-function changed(i){ for(let c=0;c<4;c++) if(!cellEq(model[i][c], origCell(i,c))) return true; return false; }
+function isSpecial(i){ return SLOT[i]!==undefined && !model[i][0].seq && model[i][0].w===0xC000; }
+function origExt(n,j){ return cellFromWord(orig, rd16(orig, EXT+n*32+j*2)); }
+function scoped(i){ return insScope!=="main" && isSpecial(i); }
+function getCell(i,c){ return scoped(i) ? ext[SLOT[i]][insScope*4+c] : model[i][c]; }
+function setCell(i,c,v){ if (scoped(i)) ext[SLOT[i]][insScope*4+c]=v; else model[i][c]=v; }
+function origScoped(i,c){ return scoped(i) ? origExt(SLOT[i], insScope*4+c) : origCell(i,c); }
+function faceCell(i){ return isSpecial(i) ? ext[SLOT[i]][viewLayer*4+viewCol] : model[i][viewCol]; }
+function changed(i){
+  for(let c=0;c<4;c++) if(!cellEq(model[i][c], origCell(i,c))) return true;
+  if (SLOT[i]!==undefined) for(let j=0;j<16;j++) if(!cellEq(ext[SLOT[i]][j], origExt(SLOT[i],j))) return true;
+  return false; }
 
 /* ---------- sequences: text <-> words ---------- */
 function seqToText(words){
@@ -381,27 +440,24 @@ function build(){
   const out = orig.slice();
   const nm = (hdr.name||"").replace(/[^\x20-\x7E]/g,"?").slice(0,24).padEnd(24," ");
   for (let i=0;i<24;i++) out[3+i]=nm.charCodeAt(i);
-  out[0x23]=hdr.kpR; out[0x24]=hdr.kpL;
+  out[0x23]=hdr.kpR; out[0x24]=hdr.kpL; hdr.states.forEach(([l,pg],n)=>{ out[0x30+n*8]=l; out[0x31+n*8]=pg; });
   let alloc = stringEnd(orig); const placed = new Map(); let added = 0;
-  for (let i=0;i<NKEYS;i++) for (let c=0;c<4;c++){
-    const cell=model[i][c]; let w;
-    if (cell.seq){
-      if (!cell.seq.length) w=0;
-      else if (cell.ptr!=null && cellEq(cell, {seq:readSeq(orig,cell.ptr)})) w=0x8000|cell.ptr;
-      else {
-        const key=cell.seq.join(",");
-        if (!placed.has(key)){
-          const need=(cell.seq.length+1)*2;
-          if (alloc+need>FILE_SIZE) throw new Error("The sequence area is full.");
-          cell.seq.forEach((x,j)=>{ out[alloc+j*2]=x>>8; out[alloc+j*2+1]=x&0xFF; });
-          out[alloc+cell.seq.length*2]=0; out[alloc+cell.seq.length*2+1]=0;
-          placed.set(key, alloc-STR_BASE); alloc+=need; added+=need;
-        }
-        w=0x8000|placed.get(key);
-      }
-    } else w=cell.w;
-    out[MAIN+i*8+c*2]=w>>8; out[MAIN+i*8+c*2+1]=w&0xFF;
-  }
+  const enc = cell => {
+    if (!cell.seq) return cell.w;
+    if (!cell.seq.length) return 0;
+    if (cell.ptr!=null && cellEq(cell, {seq:readSeq(orig,cell.ptr)})) return 0x8000|cell.ptr;
+    const key=cell.seq.join(",");
+    if (!placed.has(key)){
+      const need=(cell.seq.length+1)*2;
+      if (alloc+need>FILE_SIZE) throw new Error("The sequence area is full.");
+      cell.seq.forEach((x,j)=>{ out[alloc+j*2]=x>>8; out[alloc+j*2+1]=x&0xFF; });
+      out[alloc+cell.seq.length*2]=0; out[alloc+cell.seq.length*2+1]=0;
+      placed.set(key, alloc-STR_BASE); alloc+=need; added+=need;
+    }
+    return 0x8000|placed.get(key);
+  };
+  for (let i=0;i<NKEYS;i++) for (let c=0;c<4;c++){ const w=enc(model[i][c]); out[MAIN+i*8+c*2]=w>>8; out[MAIN+i*8+c*2+1]=w&0xFF; }
+  ext.forEach((row,n)=>row.forEach((cell,j)=>{ const w=enc(cell); out[EXT+n*32+j*2]=w>>8; out[EXT+n*32+j*2+1]=w&0xFF; }));
   return {bytes:out, end:alloc, added};
 }
 
@@ -411,7 +467,7 @@ function renderKbd(){
   kbd.style.width=(22.5*u)+"px"; kbd.style.height=((Y+5)*u)+"px";
   let html=`<span class="zone" style="left:0;top:${4*u-2}px">Left keypad</span><span class="zone" style="left:${18.5*u}px;top:${4*u-2}px">Right keypad</span><span class="zone" style="left:${5.25*u}px;top:${1*u+6}px">LCD soft keys</span>`;
   for (const [i,x,y,w,h,l] of fullPlan()){
-    const cell=model[i][viewCol], k=kindOf(cell);
+    const cell=faceCell(i), k=kindOf(cell);
     const cls=["key", k==="none"?"un":k==="seq"?"sq":k==="special"?"sp":"", changed(i)?"ch":"", i===sel?"sel":""].join(" ");
     html+=`<button class="${cls}" data-k="${i}" style="left:${x*u}px;top:${y*u}px;width:${w*u-4}px;height:${h*u-4}px" title="${esc(l)} · 0x${hex2(i)} · ${esc(describe(cell,false))}"><span class="ph">${esc(l)}</span><span class="ac">${esc(describe(cell,true))}</span></button>`;
   }
@@ -439,8 +495,14 @@ function keyOptions(selCode){
   return h;
 }
 function renderIns(){
-  const i=sel, row=model[i];
-  let h=`<h2>${esc(PHYS[i]||"Key")}<span class="mono">internal 0x${hex2(i)}</span></h2>
+  const i=sel, row=[0,1,2,3].map(c=>getCell(i,c));
+  let h=`<h2>${esc(PHYS[i]||"Key")}<span class="mono">internal 0x${hex2(i)}</span></h2>`;
+  if (isSpecial(i)){
+    h+=`<div class="tabs" role="tablist" style="padding:0">${PAGES.map((t,p)=>`<button class="tab" role="tab" data-act="scope" data-s="${p}" aria-selected="${insScope===p}" title="${stateLabel(p)}">${t}<span class="hint"> · ${stateLabel(p)}</span></button>`).join("")}<button class="tab" role="tab" data-act="scope" data-s="main" aria-selected="${insScope==="main"}">Table entry</button></div>`;
+    h+= insScope==="main" ? `<div class="hint">This key is handled per layer. Pick a layer above to edit what it sends; change the entry below only to take the key out of layer handling.</div>`
+      : `<div class="hint">Used while Prev/Next is on state ${insScope+1} (${stateLabel(insScope)}).${insScope===0?" A keyboard macro on a soft key takes priority in state 1.":""} Unassigned = the keyboard's own macro, if any.</div>`;
+  }
+  h+=`
   <div class="row"><button class="btn small" data-act="copy0">Copy Plain to all columns</button><button class="btn small" data-act="revert"${changed(i)?"":" disabled"}>Revert key</button></div>`;
   row.forEach((cell,c)=>{
     const k=kindOf(cell);
@@ -479,44 +541,46 @@ function renderSide(){
   $("meterTxt").textContent = r.err ? r.err+" Shorten some sequences." : `${shown} / ${total} bytes used${r.added?` (+${r.added} from your edits)`:""} · room for about ${Math.floor(left/4)} more keystrokes`;
   $("saveBtn").disabled=!!r.err;
   const ch=[]; for (let i=0;i<NKEYS;i++) if (changed(i)) ch.push(i);
-  const hdrCh = hdr.name!==new TextDecoder("latin1").decode(orig.slice(3,27)).replace(/[\s\0]+$/,"") || hdr.kpL!==orig[0x24] || hdr.kpR!==orig[0x23];
+  const hdrCh = hdr.name!==new TextDecoder("latin1").decode(orig.slice(3,27)).replace(/[\s\0]+$/,"") || hdr.kpL!==orig[0x24] || hdr.kpR!==orig[0x23] || hdr.states.some(([l,pg],n)=>l!==orig[0x30+n*8]||pg!==orig[0x31+n*8]);
   $("changes").innerHTML = (hdrCh?`<li class="hint">Header changed</li>`:"") + (ch.length ? ch.map(i=>`<li><button data-k="${i}"><span class="mono">${hex2(i)}</span><span>${esc(PHYS[i]||"—")}: ${esc(describe(origCell(i,0),true))} → ${esc(describe(model[i][0],false))}</span></button></li>`).join("") : (hdrCh?"":`<li class="hint">No changes yet.</li>`));
 }
 function renderAll(){ fullPlan(); renderKbd(); if(!$("listView").hidden) renderList(); renderIns(); renderSide(); }
 function refresh(){ renderKbd(); if(!$("listView").hidden) renderList(); renderSide(); }
 
 /* ---------- events ---------- */
-function select(i){ sel=i; renderAll(); }
+function select(i){ sel=i; insScope = isSpecial(i) ? (insScope==="main"?0:insScope) : "main"; renderAll(); }
 $("kbd").addEventListener("click",e=>{ const b=e.target.closest("[data-k]"); if(b) select(+b.dataset.k); });
 $("allBody").addEventListener("click",e=>{ const r=e.target.closest("[data-k]"); if(r) select(+r.dataset.k); });
 $("changes").addEventListener("click",e=>{ const b=e.target.closest("[data-k]"); if(b) select(+b.dataset.k); });
 $("colView").addEventListener("change",e=>{ viewCol=+e.target.value; refresh(); });
+$("layerView").addEventListener("change",e=>{ viewLayer=+e.target.value; refresh(); });
 $("onlyUsed").addEventListener("change",renderList);
 function setTab(list){ $("tabKbd").setAttribute("aria-selected",String(!list)); $("tabList").setAttribute("aria-selected",String(list)); $("kbdView").hidden=list; $("listView").hidden=!list; if(list) renderList(); }
 $("tabKbd").addEventListener("click",()=>setTab(false)); $("tabList").addEventListener("click",()=>setTab(true));
 
 $("ins").addEventListener("change",e=>{
-  const col=e.target.closest(".col"); if(!col) return; const c=+col.dataset.c, cell=model[sel][c], f=e.target.dataset.f;
+  const col=e.target.closest(".col"); if(!col) return; const c=+col.dataset.c, cell=getCell(sel,c), f=e.target.dataset.f;
   if (f==="kind"){
     const v=e.target.value;
-    model[sel][c] = v==="none"?{w:0}: v==="key"?{w:0x4000|(cellKeyGuess(sel))}: v==="seq"?{seq:[], ptr:null}: v==="special"?{w:0xC000}:{w:cell.seq?0:cell.w};
+    setCell(sel,c, v==="none"?{w:0}: v==="key"?{w:0x4000|(cellKeyGuess(sel))}: v==="seq"?{seq:[], ptr:null}: v==="special"?{w:0xC000}:{w:cell.seq?0:cell.w});
     renderIns(); refresh(); return;
   }
-  if (f==="tgt"){ model[sel][c]={w:(cell.w&0xFF00)|(+e.target.value)}; }
-  if (f==="mod"){ const b=+e.target.dataset.b; model[sel][c]={w: cell.w ^ (b<<8)}; }
-  if (f==="raw"){ const v=parseInt(e.target.value,16); if(!isNaN(v)&&v>=0&&v<=0xFFFF&&(v>>12)!==8) model[sel][c]={w:v}; else { toast("A raw word is 4 hex digits (8xxx is reserved for sequences)."); } renderIns(); }
+  if (f==="tgt"){ setCell(sel,c,{w:(cell.w&0xFF00)|(+e.target.value)}); }
+  if (f==="mod"){ const b=+e.target.dataset.b; setCell(sel,c,{w: cell.w ^ (b<<8)}); }
+  if (f==="raw"){ const v=parseInt(e.target.value,16); if(!isNaN(v)&&v>=0&&v<=0xFFFF&&(v>>12)!==8) setCell(sel,c,{w:v}); else { toast("A raw word is 4 hex digits (8xxx is reserved for sequences)."); } renderIns(); }
   refresh();
 });
 $("ins").addEventListener("input",e=>{
   if (e.target.dataset.f!=="seq") return;
   const c=+e.target.closest(".col").dataset.c;
-  try { const words=parseSeq(e.target.value); model[sel][c]={seq:words, ptr:model[sel][c].ptr}; $("seqErr"+c).textContent=""; refresh(); }
+  try { const words=parseSeq(e.target.value); setCell(sel,c,{seq:words, ptr:getCell(sel,c).ptr}); $("seqErr"+c).textContent=""; refresh(); }
   catch(err){ $("seqErr"+c).textContent=err.message; }
 });
 $("ins").addEventListener("click",e=>{
   const b=e.target.closest("[data-act]"); if(!b) return;
-  if (b.dataset.act==="copy0"){ for(let c=1;c<4;c++) model[sel][c]=JSON.parse(JSON.stringify(model[sel][0])); renderAll(); }
-  if (b.dataset.act==="revert"){ for(let c=0;c<4;c++) model[sel][c]=origCell(sel,c); renderAll(); }
+  if (b.dataset.act==="scope"){ insScope = b.dataset.s==="main" ? "main" : +b.dataset.s; renderIns(); return; }
+  if (b.dataset.act==="copy0"){ for(let c=1;c<4;c++) setCell(sel,c,JSON.parse(JSON.stringify(getCell(sel,0)))); renderAll(); }
+  if (b.dataset.act==="revert"){ for(let c=0;c<4;c++) model[sel][c]=origCell(sel,c); if(SLOT[sel]!==undefined) for(let j=0;j<16;j++) ext[SLOT[sel]][j]=origExt(SLOT[sel],j); renderAll(); }
   if (b.dataset.act==="trq"){
     const c=+b.dataset.c, inp=$("trq"+c); layoutName=$("lay"+c).value; const r=textToKeys(inp.value, LAYOUTS[layoutName]);
     if (r.bad.length) toast(`No key for these characters in ${layoutName}: `+r.bad.join(" "));
@@ -526,6 +590,11 @@ $("ins").addEventListener("click",e=>{
 });
 function cellKeyGuess(i){ const o=origCell(i,0); return (!o.seq && ((o.w>>8)&0xF0)===0x40) ? (o.w&0xFF) : (AT[i]?i:0x1F); }
 
+function renderStates(){
+  $("hStates").innerHTML = hdr.states.map(([l,pg],n)=>`<span class="st">${n+1}<input id="stL${n}" class="mono" type="text" inputmode="numeric" maxlength="2" value="${l}" data-st="${n}" aria-label="State ${n+1} layer"><select id="stP${n}" data-sp="${n}" aria-label="State ${n+1} page">${[0,1,2,3].map(p=>`<option value="${p}"${p===pg?" selected":""}>p${p+1}</option>`).join("")}</select></span>`).join("");
+}
+$("hStates").addEventListener("input",e=>{ const n=e.target.dataset.st; if(n===undefined) return; const v=parseInt(e.target.value,10); if(!isNaN(v)&&v>=0&&v<=255){ hdr.states[+n][0]=v; renderSide(); renderIns(); } });
+$("hStates").addEventListener("change",e=>{ const n=e.target.dataset.sp; if(n===undefined) return; hdr.states[+n][1]=+e.target.value; renderSide(); renderIns(); });
 $("hName").addEventListener("input",e=>{ hdr.name=e.target.value.replace(/[^\x20-\x7E]/g,""); renderSide(); });
 ["hKpL","hKpR"].forEach(id=>{ $(id).innerHTML=Object.entries(KEYPAD_IDS).map(([v,t])=>`<option value="${v}">${hex2(+v)} · ${t}</option>`).join("");
   $(id).addEventListener("change",e=>{ hdr[id==="hKpL"?"kpL":"kpR"]=+e.target.value; renderAll(); }); });
@@ -534,7 +603,64 @@ $("fileIn").addEventListener("change",async e=>{ const f=e.target.files[0]; if(f
 const drop=$("drop");
 ["dragenter","dragover"].forEach(t=>document.addEventListener(t,e=>{ e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave","drop"].forEach(t=>document.addEventListener(t,e=>{ e.preventDefault(); if(t==="drop"||e.target===document.documentElement) drop.classList.remove("over"); }));
-document.addEventListener("drop",async e=>{ const f=e.dataTransfer?.files?.[0]; drop.classList.remove("over"); if(f) load(await f.arrayBuffer(), f.name); });
+document.addEventListener("drop",async e=>{ const f=e.dataTransfer?.files?.[0]; drop.classList.remove("over"); if(!f) return; const buf=await f.arrayBuffer(); if (buf.byteLength===LAY_SIZE) loadLayer(buf, f.name); else load(buf, f.name); });
+
+/* ---------- LCD layer files ---------- */
+const LAY_SIZE = 2560, LAY_COL = 0xA0, LAY_TXT = 0x100;
+const COLORS = ["White","Green","Red","Yellow"];
+let layOrig = null, layW = null, layFile = "", layPage = 0, laySel = 12;
+const lOff = (pg,k) => LAY_TXT + (pg*24+k)*24;
+function loadLayer(buf, name){
+  const b = new Uint8Array(buf);
+  if (b.length !== LAY_SIZE){ toast(`This file is ${b.length} bytes; LAYER files are 2560 bytes.`); return; }
+  layOrig = b; layW = b.slice(); layFile = name.replace(/^.*[\\/]/,"");
+  $("layName").textContent = layFile; $("laySave").disabled = false; $("lcdWrap").hidden = false;
+  $("layHint").textContent = "Top row: LCD soft keys. Bottom row: the F1–F12 keys under the display. The LCD shows three lines of six characters; inverse lines are drawn white on black. A soft key left blank shows the keyboard's own macro legend instead.";
+  renderLayer();
+}
+function lineText(b,o){ let t="",inv=0; for(let i=0;i<6;i++){ const x=b[o+i]; if(x&0x80) inv++; const c=x&0x7F; t+= c>=32&&c<127 ? String.fromCharCode(c) : " "; } return {t, inv:inv>0, mixed:inv>0&&inv<6}; }
+function keyEdited(pg,k){ const o=lOff(pg,k); if(layW[LAY_COL+pg*24+k]!==layOrig[LAY_COL+pg*24+k]) return true; for(let i=0;i<24;i++) if(layW[o+i]!==layOrig[o+i]) return true; return false; }
+function cellHtml(pg,k){
+  const o=lOff(pg,k), col=layW[LAY_COL+pg*24+k]&3;
+  const lines=[0,1,2].map(L=>{ let h=""; for(let i=0;i<6;i++){ const x=layW[o+L*6+i], c=x&0x7F, ch=esc(c>=32&&c<127?String.fromCharCode(c):" "); h+= x&0x80 ? `<i>${ch}</i>` : ch; } return `<span>${h}</span>`; }).join("");
+  const no = k>=12 ? `Soft ${k-11}` : `F${k+1}`;
+  return `<button class="lcell c${col}${keyEdited(pg,k)?" ed":""}${k===laySel?" sel":""}" data-lk="${k}" title="${no} · ${COLORS[col]}"><span class="no">${no}</span>${lines}</button>`;
+}
+function renderLayer(){
+  if (!layW) return;
+  let h=`<div class="band">Soft keys</div>`;
+  for (let k=12;k<24;k++) h+=cellHtml(layPage,k);
+  h+=`<div class="band">F1 – F12</div>`;
+  for (let k=0;k<12;k++) h+=cellHtml(layPage,k);
+  $("lcd").innerHTML=h;
+  const o=lOff(layPage,laySel), col=layW[LAY_COL+layPage*24+laySel]&3, name= laySel>=12?`Soft key ${laySel-11}`:`F${laySel+1}`;
+  let f=`<h3 style="margin-top:6px">${name} <span class="hint">page ${layPage+1}</span></h3><div class="layform">`;
+  for (let L=0;L<3;L++){ const lt=lineText(layW,o+L*6);
+    f+=`<div class="field"><label for="ll${L}">Line ${L+1}</label><div class="ln"><input type="text" id="ll${L}" data-l="${L}" maxlength="6" value="${esc(lt.t.replace(/\s+$/,""))}" spellcheck="false"><label class="hint" style="display:inline-flex;gap:5px;align-items:center"><input type="checkbox" id="li${L}" data-inv="${L}"${lt.inv?" checked":""}>Inverse</label></div></div>`; }
+  f+=`<div class="field"><label for="lcol">Colour</label><select id="lcol">${COLORS.map((c,i)=>`<option value="${i}"${i===col?" selected":""}>${c}</option>`).join("")}</select></div>`;
+  f+=`<div class="row"><button class="btn small" id="lclear">Clear label</button><button class="btn small" id="lrevert"${keyEdited(layPage,laySel)?"":" disabled"}>Revert key</button></div></div>`;
+  $("layIns").innerHTML=f;
+}
+function writeLine(L){
+  const o=lOff(layPage,laySel)+L*6, txt=$("ll"+L).value, inv=$("li"+L).checked;
+  let bad=false;
+  for (let i=0;i<6;i++){ let ch=txt[i]??" "; let c=ch.charCodeAt(0); if(c<32||c>126){ c=63; bad=true; } layW[o+i]= c | (inv?0x80:0); }
+  if (bad) toast("The LCD only takes plain ASCII; other characters became “?”.");
+}
+function refreshLcd(){ const keep=document.activeElement?.id; const pos=document.activeElement?.selectionStart; renderLayer(); if(keep&&$(keep)){ $(keep).focus(); try{ $(keep).setSelectionRange(pos,pos);}catch(_){} } }
+$("lcd").addEventListener("click",e=>{ const b=e.target.closest("[data-lk]"); if(b){ laySel=+b.dataset.lk; renderLayer(); } });
+$("layIns").addEventListener("input",e=>{ const L=e.target.dataset.l; if(L!==undefined){ writeLine(+L); refreshLcd(); } });
+$("layIns").addEventListener("change",e=>{
+  if (e.target.dataset.inv!==undefined){ writeLine(+e.target.dataset.inv); refreshLcd(); }
+  if (e.target.id==="lcol"){ layW[LAY_COL+layPage*24+laySel]=+e.target.value; renderLayer(); }
+});
+$("layIns").addEventListener("click",e=>{
+  const o=lOff(layPage,laySel);
+  if (e.target.id==="lclear"){ for(let i=0;i<24;i++) layW[o+i]=0x20; layW[LAY_COL+layPage*24+laySel]=0; renderLayer(); }
+  if (e.target.id==="lrevert"){ layW.set(layOrig.slice(o,o+24),o); layW[LAY_COL+layPage*24+laySel]=layOrig[LAY_COL+layPage*24+laySel]; renderLayer(); }
+});
+$("layPage").addEventListener("change",e=>{ layPage=+e.target.value; renderLayer(); });
+$("layIn").addEventListener("change",async e=>{ const f=e.target.files[0]; if(f) loadLayer(await f.arrayBuffer(), f.name); e.target.value=""; });
 
 /* ---------- zip (stored) + save ---------- */
 const DL = (async()=>{ try{ return window.claude?.use ? await window.claude.use("downloads") : null; }catch(_){ return null; } })();
@@ -562,6 +688,13 @@ $("saveBtn").addEventListener("click",async()=>{
   }
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([zip],{type:"application/zip"})); a.download=zipName; document.body.appendChild(a); a.click(); a.remove();
   toast(`Downloaded ${zipName}.`);
+});
+$("laySave").addEventListener("click",async()=>{
+  if (!layW) return;
+  const name=layFile||"LAYER.LAY", zip=zipOne(name, layW), zipName=name.replace(/\.lay$/i,"")+".zip";
+  const dl = await DL;
+  if (dl){ try{ await dl.save({filename:zipName, data:new Blob([zip])}); toast(`Saved ${zipName}.`); }catch(e){ if(e&&e.code!=="declined") toast("Could not save: "+(e.message||e.code)); } return; }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([zip],{type:"application/zip"})); a.download=zipName; document.body.appendChild(a); a.click(); a.remove(); toast(`Downloaded ${zipName}.`);
 });
 let tt; function toast(m){ const t=$("toast"); t.textContent=m; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,4200); }
 

@@ -11,7 +11,9 @@ Open `index.html` in a browser, drop a `.kct` file exported from the keyboard, e
 - Four actions per key, one for each modifier state: plain, Shift, Ctrl, Alt.
 - Per action: a key with forced modifiers (Shift / Ctrl / AltGr / Exact), a key sequence, keyboard-handled special key, or a raw word.
 - Key sequences can be typed directly or generated from text for the US or Turkish Q host layout.
-- Header editing: table name and plug-in keypad IDs.
+- Header editing: table name, plug-in keypad IDs and the four Prev/Next states (LCD layer + page each).
+- Per-state actions for soft keys, F keys and modifiers (Prev/Next states 1–4).
+- LCD layer editor (`LAYERnn.LAY`): three 6-character lines per key, inverse text and key colour.
 - Change list, per-key revert and a usage meter for the sequence area.
 - Download as a zip containing the `.kct` (in the same 4096-byte format).
 
@@ -30,9 +32,10 @@ All 16-bit words are big-endian.
 | `0x023` | 1 | Expected **right** keypad ID |
 | `0x024` | 1 | Expected **left** keypad ID |
 | `0x02F` | 1 | KCT number |
-| `0x030` | 1 | KCT number of the table it was derived from |
+| `0x030` | 4 × 8 | Prev/Next states 1–4 at `0x30`, `0x38`, `0x40`, `0x48`. Byte 0 = LCD layer number (`LAYERnn.LAY`), byte 1 = page in that layer file (`0`–`3`). Layer `00` in states 2–4 = state not used. Remaining 6 bytes: always `00` in observed files |
+| `0x050` | 1 | Unknown |
 | `0x080` | 0x580 | Main table: 4 words per internal key `0x00`–`0xAF` |
-| `0x600` | … | Special-key table (modifiers, Tab, Caps, F keys), 16 words per key |
+| `0x600` | 0x460 | Special-key table: 35 keys × 4 states × 4 columns |
 | `0xAC0` | … | Key sequences, each ending with `0000` |
 
 **Internal key numbers:** `0x00`–`0x7F` main keyboard, `0x80`–`0x8B` LCD soft keys,
@@ -54,6 +57,24 @@ All 16-bit words are big-endian.
 | `01nn` | Raw byte (serial emulations) |
 
 Inside sequences `40nn` presses and `C0nn` releases key `nn`.
+
+**Special keys and layers:** keys whose main entry is `C000` take their actions from the special-key table,
+in this fixed slot order: Tab, Caps, LShift, RShift, LCtrl, LWin, LAlt, AltGr, RWin, Menu, RCtrl, F1–F12, LCD soft keys 1–12.
+Each slot holds 4 groups of 4 columns, one group per Prev/Next state: group *n* is used while the keyboard is in state *n*
+(and the LCD shows that state's layer and page). Prev/Next cycles through the states that have a layer set.
+A keyboard user macro on a soft key wins over state 1.
+
+## LAYER format (`LAYERnn.LAY`, 2560 bytes)
+
+| Offset | Size | Content |
+|---|---|---|
+| `0x000` | 160 | Unused in all observed files (spaces) |
+| `0x0A0` | 96 | Key colours: 4 pages × 24 keys; `0` white, `1` green, `2` red, `3` yellow |
+| `0x100` | 2304 | Labels: 4 pages × 24 keys × 24 bytes |
+
+Keys 0–11 are the F1–F12 row below the LCD, 12–23 the soft keys above it. A label is 4 lines of 6 characters;
+the LCD shows the first 3. Characters with the top bit set are drawn inverse (white on black).
+A soft key with a label is treated as assigned, so the keyboard's own macro legend and icon are only shown on keys left blank.
 
 Keypad keys only follow the table when the header keypad IDs are set (the keyboard shows the installed
 keypads under *Software Info*; IDs follow the solder-bridge coding in the MK06 manual, e.g. `04` Bloomberg, `0B` Reuters standard).

@@ -8,10 +8,11 @@ Format as reverse engineered from sample tables (not official, partly guessed):
   0x001  u8   emulation type? (0x12 PC, 0x14 RD2000, 0x15 Bloomberg, 0x21 RD3000 ...)
   0x002  u8   00 = PC style, 01 = serial/dealing style?
   0x003  24s  table name, space padded, then 00
-  0x023  u8   expected plug-in keypad ID, left  (manual 4.5: 01 RD2000, 04 Bloomberg, 07 EUREX, 0A SUN ...)
-  0x024  u8   expected plug-in keypad ID, right
+  0x023  u8   expected plug-in keypad ID, RIGHT  (manual 4.5: 01 RD2000, 04 Bloomberg, 07 EUREX, 0A SUN ...)
+  0x024  u8   expected plug-in keypad ID, LEFT
   0x02F  u8   KCT number
-  0x030  u8   KCT number of the table it was derived from
+  0x030  4 x 8 bytes: Prev/Next states 1-4 (0x30,0x38,0x40,0x48):
+         byte0 = LCD layer number, byte1 = page (0-3); layer 0 in states 2-4 = unused
   0x080  main table: 8 bytes per internal key number (0x00-0xAF), = 4 big-endian 16-bit
          action words, one per column (verified on a device): used when the key
          is pressed plain | with Shift | with Ctrl | with Alt
@@ -117,7 +118,8 @@ def main(path):
     d = DATA = open(path, "rb").read()
     name = d[3:27].decode("latin1").rstrip(" \0")
     print(f"{path}: name={name!r} type={d[1]:02X} style={d[2]:02X} country?={d[0x1B]:02X} "
-          f"keypads L={d[0x23]:02X} R={d[0x24]:02X} kct={d[0x2F]} base={d[0x30]}")
+          f"keypads R={d[0x23]:02X} L={d[0x24]:02X} kct={d[0x2F]} "
+          f"states={' '.join(f'L{d[0x30+n*8]}p{d[0x31+n*8]+1}' for n in range(4) if n == 0 or d[0x30+n*8])}")
     for i in range(0xB0):
         e = d[0x80 + i * 8:0x88 + i * 8]
         words = [int.from_bytes(e[k:k + 2], "big") for k in range(0, 8, 2)]
