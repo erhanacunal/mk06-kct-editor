@@ -1,21 +1,158 @@
-# MK06 KCT Editor
+# MK06 KCT Editor and RP2040 converter
 
-A single-file, offline editor for the keycode tables (`.kct`) of the **Wey Technology MK06** multi-workstation keyboard.
+Tools for the **Wey Technology MK06** multi-workstation keyboard:
 
-Open `index.html` in a browser, drop a `.kct` file exported from the keyboard, edit keys, and download the result. The file never leaves your machine.
+- **KCT editor** (`index.html`): an offline editor for the keyboard's keycode tables (`.kct`) and LCD layer files (`LAYERnn.LAY`).
+- **RP2040 converter firmware** (`firmware/`): a QMK keyboard that turns a Raspberry Pi Pico into a USB keyboard for the MK06, connected over DLINK or a serial port. Includes media keys and a USB-to-Host-Port-A bridge for file transfer.
+- **Command line tools** (`tools/`): `weytool.py` to list, read, write and delete files on the keyboard (Windows and Linux), and `kct_dump.py` to dump a `.kct` as text.
 
-## Features
+The file formats below are reverse engineered and tested on a real MK06.
+
+```
+index.html                      KCT / LAYER editor (open in a browser)
+tools/weytool.py                keyboard file transfer over USB or Host Port A
+tools/kct_dump.py               .kct dumper
+firmware/uf2/                   prebuilt firmware for the Raspberry Pi Pico
+firmware/qmk/keyboards/converter/wey_mk06/
+                                QMK source, copy into a QMK tree to build
+```
+
+## KCT editor
+
+Open `index.html` in a browser (it also works from GitHub Pages). Drop a `.kct` or `LAYERnn.LAY` file exported
+from the keyboard, edit, and download the result. The file never leaves your machine.
 
 - Keyboard view with the real MK06 layout: main block, LCD soft keys and both plug-in keypads
   (Reuters and Bloomberg keypads are drawn with their real legends and double-wide keys).
 - Four actions per key, one for each modifier state: plain, Shift, Ctrl, Alt.
-- Per action: a key with forced modifiers (Shift / Ctrl / AltGr / Exact), a key sequence, keyboard-handled special key, or a raw word.
+- Per action: a key with forced modifiers (Shift / Ctrl / AltGr / Exact), a key sequence, a keyboard-handled special key, or a raw word.
 - Key sequences can be typed directly or generated from text for the US or Turkish Q host layout.
 - Header editing: table name, plug-in keypad IDs and the four Prev/Next states (LCD layer + page each).
 - Per-state actions for soft keys, F keys and modifiers (Prev/Next states 1–4).
-- LCD layer editor (`LAYERnn.LAY`): three 6-character lines per key, inverse text and key colour.
+- Media keys for the RP2040 converter (see [Media keys](#media-keys)).
+- LCD layer editor: three 6-character lines per key, inverse text and key colour.
 - Change list, per-key revert and a usage meter for the sequence area.
 - Download as a zip containing the `.kct` (in the same 4096-byte format).
+
+Load the result onto the keyboard with a USB stick, or with `tools/weytool.py` (below).
+
+## RP2040 converter
+
+A QMK converter based on MMcM's Wey MK06 converter (originally for Teensy, from [Alectardy98/vial-qmk-alectardy98_06](https://github.com/Alectardy98/vial-qmk-alectardy98_06)), ported to the RP2040.
+The Pico reads the keyboard's serial output and appears on USB as a normal keyboard (and mouse). Which keys the keyboard
+sends is set by the active KCT; the QMK keymap only maps those key numbers to USB keycodes.
+
+### Prebuilt firmware
+
+Hold BOOTSEL while plugging in the Pico (or double-tap reset once QMK is installed) and copy a `.uf2` from `firmware/uf2/` to the `RPI-RP2` drive.
+
+| File | Use |
+|---|---|
+| `converter_wey_mk06_rp2040_dlink.uf2` | **Recommended.** DLINK on the External Port, with media keys. |
+| `converter_wey_mk06_rp2040_dlink_hpa.uf2` | `dlink`, plus a USB serial bridge to Host Port A for `weytool.py` and the diagnostic shortcuts below. |
+| `converter_wey_mk06_rp2040_dlink_debug.uf2` | `dlink`, plus logging of every received byte to the QMK console and the Pico LED blinking on each byte. |
+| `converter_wey_mk06_rp2040_p4.uf2` | Plain serial keyboard on Port 4 (RS-232), no DLINK. |
+| `converter_wey_mk06_rp2040_p4_debug.uf2` | `p4` with byte logging. |
+| `converter_wey_mk06_rp2040_default.uf2` | Upstream default: Host Port A as host terminal on UART0, DLINK on UART1. |
+
+Built from QMK `master` (October 2026).
+
+### Wiring
+
+The RS-232 / RS-423 ports need a 3.3 V level shifter such as a **MAX3232** module (check that its charge pump
+actually produces about ±5 V on V+ / V−; a dead pump gives working RX but no TX). The RP2040 is not 5 V tolerant.
+
+Keyboard connector: 36-pin half-pitch Centronics (HPCN36). GND is on pins 1, 11 and 19.
+
+| Signal | Pico | MAX3232 | HPCN36 pin | Used by |
+|---|---|---|---|---|
+| UART0 TX | GP0 | T1IN → T1OUT | 28 (EXT RXD) | `dlink*`, `p4*` (Port 4: pin 17) |
+| UART0 RX | GP1 | R1OUT ← R1IN | 10 (EXT TXD) | `dlink*`, `p4*` (Port 4: pin 35) |
+| UART1 TX | GP4 | T2IN → T2OUT | 3 (HPA RXD) | `dlink_hpa` |
+| UART1 RX | GP5 | R2OUT ← R2IN | 21 (HPA TXD) | `dlink_hpa` |
+| GND | GND | GND | 1 / 11 / 19 | all |
+
+RX/TX on the keyboard side are from the keyboard's point of view. In the keyboard's Setup menu, set the External Port to DLINK.
+
+**Cabling.** Run every signal in its own twisted pair together with a GND wire, e.g. a CAT5/CAT6 cable:
+
+| Pair | Solid colour | White-striped |
+|---|---|---|
+| Orange | EXT TXD (pin 10) | GND |
+| Green | EXT RXD (pin 28) | GND |
+| Blue | HPA TXD (pin 21) | GND |
+| Brown | HPA RXD (pin 3) | GND |
+
+Connect all white-striped wires to GND at both ends; connect a cable shield at the Pico end only. Do not put two
+signals in one pair: with TX and RX in the D+/D− pair of a USB cable, long transfers on Host Port A at 115200 baud were corrupted.
+
+### Media keys
+
+The `dlink` keymaps put consumer keys on key numbers `0xA0`–`0xAF`. In the KCT editor pick them from the
+*Media (QMK converter)* group, or type their names in a sequence (`VolUp VolUp Mute`).
+
+| Code | Key | Code | Key | Code | Key | Code | Key |
+|---|---|---|---|---|---|---|---|
+| A0 | Play/Pause | A4 | Mute | A8 | Mail | AC | Web Search |
+| A1 | Stop | A5 | Volume − | A9 | Web Home | AD | My Computer |
+| A2 | Previous | A6 | Volume + | AA | Web Back | AE | Brightness − |
+| A3 | Next | A7 | Calculator | AB | Web Forward | AF | Brightness + |
+
+These codes are the raw numbers of the left plug-in keypad. A left keypad key whose KCT entry still sends its own
+number (`40Ax`) therefore also acts as a media key.
+
+### Host Port A bridge (`dlink_hpa`)
+
+The Pico also appears as a USB serial port (`COMx` / `/dev/ttyACM0`). Everything written to it goes out on Host Port A
+and the replies come back, so `weytool.py -D COMx` can transfer files while the keyboard keeps typing over DLINK.
+The UART runs at 115200 baud by default (the baud rate set on the PC side is ignored); it must match the keyboard's Host Port A setting.
+
+Diagnostics, typed into the focused window (e.g. Notepad):
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+Shift+F10 | Ask the keyboard for its ID on Host Port A and type the reply (`HPA 115200 YANIT 31` = OK) |
+| Ctrl+Shift+F11 | Try every baud rate from 115200 down to 1200; the first that answers is saved in EEPROM (`KAYDEDILDI`) |
+| Ctrl+Shift+F12 | Type baud rate and counters: bytes sent (`TX`), received (`RX`), UART errors (`HATA`), dropped (`KAYIP`) |
+
+### Building
+
+```sh
+python3 -m pip install qmk
+qmk setup                       # clones qmk_firmware
+cp -r firmware/qmk/keyboards/converter/wey_mk06 ~/qmk_firmware/keyboards/converter/
+qmk compile -kb converter/wey_mk06/rp2040 -km dlink
+```
+
+## Tools
+
+### weytool.py
+
+Python port of [weytool](https://github.com/funkenzuzzler/weytools): list, read, write and delete files on the keyboard.
+
+```sh
+pip install pyusb libusb-package pyserial
+python tools/weytool.py -l                       # keyboard USB port
+python tools/weytool.py -D COM12 -l              # Host Port A, e.g. through the dlink_hpa bridge
+python tools/weytool.py -B backup                # download every readable file
+python tools/weytool.py -w 8,10,KCT10_MY.kct     # upload a KCT to index 8, slot 10
+python tools/weytool.py -w LAYER10.LAY           # upload an LCD layer
+python tools/weytool.py --rawcmd 7f,e8 --rawrx 1 # raw command: keyboard ID ('1' = MK06)
+```
+
+Over the keyboard's own USB port on Windows, the keyboard's *Interface 1* needs the WinUSB driver (install with Zadig;
+leave Interface 0, the keyboard itself, alone). The original C weytool works on Linux without that step.
+Back up with `-B` before writing, and never write index 16 (PIN code).
+
+File indexes: 1 system setup, 2 user menu, 4/5 bitmaps, 8 KCT, 9 LCD layers, 10 user macros, 16 PIN code.
+
+### kct_dump.py
+
+```sh
+python tools/kct_dump.py KCT10_MY.kct
+```
+
+Prints the header (name, keypads, Prev/Next states) and every assigned key with its four actions.
 
 ## KCT format
 
@@ -78,3 +215,10 @@ A soft key with a label is treated as assigned, so the keyboard's own macro lege
 
 Keypad keys only follow the table when the header keypad IDs are set (the keyboard shows the installed
 keypads under *Software Info*; IDs follow the solder-bridge coding in the MK06 manual, e.g. `04` Bloomberg, `0B` Reuters standard).
+
+## Credits and licences
+
+- RP2040 converter: based on the Wey MK06 converter by [MMcM](https://github.com/MMcM) for [QMK](https://github.com/qmk/qmk_firmware);
+  the `firmware/` folder is GPL-2.0-or-later like QMK.
+- `weytool.py`: protocol from [funkenzuzzler/weytools](https://github.com/funkenzuzzler/weytools).
+- `KCT09_QMK149.kct` in the firmware folder comes from the upstream converter repository.

@@ -239,8 +239,12 @@ const AT = {0x01:"`",0x02:"1",0x03:"2",0x04:"3",0x05:"4",0x06:"5",0x07:"6",0x08:
 for (let i=0;i<12;i++) AT[0x70+i] = "F"+(i+1);
 for (let i=0;i<12;i++) AT[0x80+i] = "Ext"+(i+1).toString().padStart(2,"0");
 for (let i=0;i<16;i++){ AT[0x90+i] = "ExtR"+i.toString(16).toUpperCase(); AT[0xA0+i] = "ExtL"+i.toString(16).toUpperCase(); }
+// Consumer keys that the QMK converter's dlink keymaps put on codes 0xA0-0xAF.
+const MEDIA = {0xA0:"Play",0xA1:"Stop",0xA2:"Prev",0xA3:"Next",0xA4:"Mute",0xA5:"VolDown",0xA6:"VolUp",0xA7:"Calc",
+  0xA8:"Mail",0xA9:"WebHome",0xAA:"WebBack",0xAB:"WebFwd",0xAC:"WebSearch",0xAD:"MyComp",0xAE:"BrightDown",0xAF:"BrightUp"};
 const NAME2AT = {};
 for (const [k,v] of Object.entries(AT)) NAME2AT[v.toLowerCase()] = +k;
+for (const [k,v] of Object.entries(MEDIA)) if (!(v.toLowerCase() in NAME2AT)) NAME2AT[v.toLowerCase()] = +k;
 Object.assign(NAME2AT,{"ctrl":0x3A,"shift":0x2C,"alt":0x3C,"altgr":0x3E,"win":0x3B,"lctrl":0x3A,"rctrl":0x40,"lalt":0x3C,"ralt":0x3E,"lshift":0x2C,"rshift":0x39,"esc":0x6E,"del":0x4C,"ins":0x4B,"space":0x3D,"enter":0x2B,"bs":0x0F,"<":0x2D});
 
 /* ---------- Physical MK06 plan: [internal key no, x, y, w, h, label] in key units ---------- */
@@ -330,6 +334,7 @@ const rd16 = (b,o) => (b[o]<<8)|b[o+1];
 function readSeq(b, off){ const out=[]; for(let a=STR_BASE+off; a+1<b.length; a+=2){ const w=rd16(b,a); if(!w) break; out.push(w); if(out.length>400) break;} return out; }
 function cellFromWord(b,w){ return (w>>12)===8 ? {seq:readSeq(b,w&0x7FFF), ptr:w&0x7FFF} : {w}; }
 function keyName(c){ return AT[c] ?? ("k"+hex2(c)); }
+function sendName(c){ return MEDIA[c] ?? keyName(c); } // name of a key code as something to send
 
 function load(buf, name){
   const b = new Uint8Array(buf);
@@ -358,7 +363,7 @@ function describe(cell, short){
   if (cell.seq) return short ? "seq" : "Sequence: "+seqToText(cell.seq);
   const w=cell.w, hi=w>>8, lo=w&0xFF;
   if (!w) return "—";
-  if ((hi&0xF0)===0x40){ const m=modsOf(hi); return (m.length?m.join("+")+"+":"")+keyName(lo)+((hi&1)&&!short?" (exact)":""); }
+  if ((hi&0xF0)===0x40){ const m=modsOf(hi); return (m.length?m.join("+")+"+":"")+sendName(lo)+((hi&1)&&!short?" (exact)":""); }
   if (w===0xC000) return "special";
   if (hi===0x01) return "#"+hex2(lo);
   if ((hi&0xF0)===0x50) return "chr "+hex2(lo);
@@ -384,9 +389,9 @@ function seqToText(words){
   const out=[];
   for (let i=0;i<words.length;i++){
     const w=words[i], hi=w>>8, lo=w&0xFF;
-    if (hi===0x40 && words[i+1]===(0xC000|lo)){ out.push(tok(keyName(lo))); i++; continue; }
-    if (hi===0x40) out.push("+"+tok(keyName(lo)));
-    else if (hi===0xC0) out.push("-"+tok(keyName(lo)));
+    if (hi===0x40 && words[i+1]===(0xC000|lo)){ out.push(tok(sendName(lo))); i++; continue; }
+    if (hi===0x40) out.push("+"+tok(sendName(lo)));
+    else if (hi===0xC0) out.push("-"+tok(sendName(lo)));
     else if (hi===0x01) out.push("#"+hex2(lo));
     else out.push("w"+hex4(w));
   }
@@ -424,7 +429,7 @@ function textToKeys(str, layout){
   const out=[], bad=new Set();
   for (const ch of str){
     const e=layout[ch]; if(!e){ bad.add(ch); continue; }
-    const [k,mod]=e, n=tok(keyName(k));
+    const [k,mod]=e, n=tok(sendName(k));
     out.push(mod==="S" ? "LShift+"+n : mod==="G" ? "AltGr+"+n : n);
   }
   return {text: out.join(" "), bad:[...bad]};
@@ -487,10 +492,11 @@ function keyOptions(selCode){
     ["Function keys",[...Array(12).keys()].map(x=>0x70+x)],
     ["Navigation",[0x4B,0x4C,0x50,0x51,0x55,0x56,0x53,0x54,0x4F,0x59,0x7C,0x7D,0x7E]],
     ["Numpad",[0x5A,0x5F,0x64,0x69,0x5B,0x60,0x65,0x6A,0x5C,0x61,0x66,0x5D,0x62,0x67,0x6C,0x63,0x68]],
+    ["Media (QMK converter)",Object.keys(MEDIA).map(Number)],
     ["Extra (QMK matrix)",[...Array(12).keys()].map(x=>0x80+x).concat([...Array(32).keys()].map(x=>0x90+x))]];
   const seen=new Set(); let h="";
   for (const [g,list] of groups){ h+=`<optgroup label="${g}">`; for (const c of list){ if(seen.has(c)) continue; seen.add(c);
-    h+=`<option value="${c}"${c===selCode?" selected":""}>${esc(keyName(c))} · ${hex2(c)}</option>`; } h+="</optgroup>"; }
+    h+=`<option value="${c}"${c===selCode?" selected":""}>${esc(sendName(c))} · ${hex2(c)}</option>`; } h+="</optgroup>"; }
   if (!seen.has(selCode)) h+=`<option value="${selCode}" selected>k${hex2(selCode)}</option>`;
   return h;
 }
