@@ -132,8 +132,9 @@ void virtser_recv(uint8_t c) {
     hpa_tx_count++;
 }
 
+#ifdef MK06_HPA_DIAG
 /* ---------------------------------------------------------------------------
- * Diagnostics, typed into the focused window (only A-Z, 0-9 and spaces, so the
+ * Diagnostics (only with MK06_HPA_DIAG defined), typed into the focused window (only A-Z, 0-9 and spaces, so the
  * text reads the same with US and Turkish Q host layouts):
  *   mk06_hpa_probe(false)  send "7F E8" (keyboard ID) at the current baud rate
  *                          and type the reply, e.g. "HPA 115200 YANIT 31"
@@ -247,8 +248,11 @@ static void report_task(void) {
     send_string(report);
 }
 
+#endif // MK06_HPA_DIAG
+
 // Called once per matrix scan.
 void mk06_bridge_task(void) {
+#ifdef MK06_HPA_DIAG
     probe_task();
     report_task();
 
@@ -260,6 +264,7 @@ void mk06_bridge_task(void) {
         }
         return;
     }
+#endif
     if (hpa_session && timer_elapsed32(hpa_last) > MK06_HPA_IDLE_MS) {
         hpa_session = false;
     }

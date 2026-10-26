@@ -49,7 +49,8 @@ Hold BOOTSEL while plugging in the Pico (or double-tap reset once QMK is install
 | File | Use |
 |---|---|
 | `converter_wey_mk06_rp2040_dlink.uf2` | **Recommended.** DLINK on the External Port, with media keys. |
-| `converter_wey_mk06_rp2040_dlink_hpa.uf2` | `dlink`, plus a USB serial bridge to Host Port A for `weytool.py` and the diagnostic shortcuts below. |
+| `converter_wey_mk06_rp2040_dlink_hpa.uf2` | `dlink`, plus a USB serial bridge to Host Port A for `weytool.py`. |
+| `converter_wey_mk06_rp2040_dlink_hpa_diag.uf2` | `dlink_hpa` with the diagnostic shortcuts below (for setting up the Host Port A wiring). |
 | `converter_wey_mk06_rp2040_dlink_debug.uf2` | `dlink`, plus logging of every received byte to the QMK console and the Pico LED blinking on each byte. |
 | `converter_wey_mk06_rp2040_p4.uf2` | Plain serial keyboard on Port 4 (RS-232), no DLINK. |
 | `converter_wey_mk06_rp2040_p4_debug.uf2` | `p4` with byte logging. |
@@ -107,7 +108,8 @@ The Pico also appears as a USB serial port (`COMx` / `/dev/ttyACM0`). Everything
 and the replies come back, so `weytool.py -D COMx` can transfer files while the keyboard keeps typing over DLINK.
 The UART runs at 115200 baud by default (the baud rate set on the PC side is ignored); it must match the keyboard's Host Port A setting.
 
-Diagnostics, typed into the focused window (e.g. Notepad):
+Diagnostics, only in `dlink_hpa_diag`, typed into the focused window (e.g. Notepad). A baud rate saved with Ctrl+Shift+F11
+is kept when you switch back to `dlink_hpa`:
 
 | Shortcut | Action |
 |---|---|

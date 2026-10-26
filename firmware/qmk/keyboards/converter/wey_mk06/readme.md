@@ -115,6 +115,7 @@ and copy the `.uf2` file to the `RPI-RP2` drive.
 | `default` | UART0 Host Port A (host terminal), UART1 External Port (DLINK) |
 | `dlink` | UART0 External Port (DLINK), GP0/GP1. Media keys on key numbers 0xA0-0xAF |
 | `dlink_hpa` | `dlink`, plus UART1 (GP4/GP5) as a USB serial bridge to Host Port A (`mk06_hpa_bridge.c`) |
+| `dlink_hpa_diag` | `dlink_hpa` with Ctrl+Shift+F10/F11/F12 diagnostics (`MK06_HPA_DIAG`) |
 | `dlink_debug` | `dlink` with every received byte logged to the console |
 | `p4`, `p4_debug` | UART0 on Port 4 (RS-232) |
 

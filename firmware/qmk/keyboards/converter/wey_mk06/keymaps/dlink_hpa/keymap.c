@@ -116,6 +116,7 @@ void mk06_ws_activate(uint8_t ws) {
     }
 }
 
+#ifdef MK06_HPA_DIAG
 // HPA bridge diagnostics, typed into the focused window (e.g. Notepad):
 //   Ctrl+Shift+F10  ask the keyboard for its ID on Host Port A and type the reply
 //   Ctrl+Shift+F11  same, trying every baud rate from 115200 down to 1200
@@ -133,3 +134,4 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
     return true;
 }
+#endif
